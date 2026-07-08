@@ -112,17 +112,28 @@ class IngestionPipeline:
             try:
                 # We need a project ID to link to. Usually this comes from doc metadata.
                 # If not provided, we link to a default "unassigned" project.
-                project_id = doc.get("project_id", "unassigned_project")
                 
-                # Pass just the chunk IDs and metadata to Neo4j
                 graph_chunks = [{"chunk_id": c["chunk_id"]} for c in enriched_chunks]
                 
-                await self.graph_store.ingest_document(
-                    project_id=project_id,
-                    doc_id=doc["id"],
-                    title=doc.get("title", doc["id"]),
-                    chunks=graph_chunks
-                )
+                if doc.get("source") == "gmail_email":
+                    # For emails, we link to User and Thread instead of Project
+                    user_id = doc.get("user_id", "unassigned_user")
+                    thread_id = doc.get("source_metadata", {}).get("thread_id", "unassigned_thread")
+                    await self.graph_store.ingest_email(
+                        user_id=user_id,
+                        doc_id=doc["id"],
+                        thread_id=thread_id,
+                        title=doc.get("title", doc["id"]),
+                        chunks=graph_chunks
+                    )
+                else:
+                    project_id = doc.get("project_id", "unassigned_project")
+                    await self.graph_store.ingest_document(
+                        project_id=project_id,
+                        doc_id=doc["id"],
+                        title=doc.get("title", doc["id"]),
+                        chunks=graph_chunks
+                    )
             except Exception as e:
                 print(f"WARNING: Graph ingestion failed for document {doc['id']}: {e}")
                 # We do NOT raise here. 

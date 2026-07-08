@@ -69,6 +69,34 @@ class GraphService:
             "tool_ids": tool_ids
         })
 
+    async def ingest_email(self, user_id: str, doc_id: str, thread_id: str, title: str, chunks: List[Dict[str, Any]]):
+        """
+        Links a User to an Email (SENT or RECEIVED depending on context, we'll just use SENT/RECEIVED logic or HAS_EMAIL for simplicity).
+        Links an Email to a Thread.
+        Links chunks to the Email document.
+        """
+        query = """
+        MERGE (u:User {id: $user_id})
+        MERGE (t:Thread {id: $thread_id})
+        MERGE (d:Document {id: $doc_id})
+        SET d.title = $title, d.type = 'email'
+        
+        MERGE (u)-[:HAS_EMAIL]->(d)
+        MERGE (d)-[:BELONGS_TO]->(t)
+        
+        WITH d
+        UNWIND $chunks as chunk
+        MERGE (c:Chunk {id: chunk.chunk_id})
+        MERGE (d)-[:HAS_CHUNK]->(c)
+        """
+        await self.repo.execute_write(query, {
+            "user_id": user_id, 
+            "doc_id": doc_id, 
+            "thread_id": thread_id,
+            "title": title, 
+            "chunks": chunks
+        })
+
     # ==================
     # QUERIES
     # ==================
