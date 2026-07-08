@@ -1,0 +1,19 @@
+from .base import Base
+from .user import User
+from .organization import Organization
+from .workspace import Workspace
+from .project import Project
+from .role import Role, role_permissions
+from .permission import Permission
+
+# Expose all models so Alembic can discover them
+__all__ = [
+    "Base",
+    "User",
+    "Organization",
+    "Workspace",
+    "Project",
+    "Role",
+    "role_permissions",
+    "Permission",
+]

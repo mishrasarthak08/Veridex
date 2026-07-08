@@ -1,0 +1,12 @@
+openai:
+  enabled: true
+  api_key_env_var: "OPENAI_API_KEY"
+anthropic:
+  enabled: true
+  api_key_env_var: "ANTHROPIC_API_KEY"
+gemini:
+  enabled: true
+  api_key_env_var: "GEMINI_API_KEY"
+ollama:
+  enabled: false
+  base_url: "http://localhost:11434"

@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant User
+    participant API as API Router
+    participant Orchestrator
+    participant Trace as Execution Recorder
+    participant Agent
+    participant LLM
+
+    User->>API: POST /agents/goal
+    API->>Trace: start_trace("goal")
+    API->>Orchestrator: execute_goal()
+    
+    Orchestrator->>Trace: start_span("Planner")
+    Orchestrator-->>Trace: end_span()
+    
+    Orchestrator->>Agent: assign_task()
+    Agent->>Trace: start_span("AgentExecution")
+    
+    Agent->>LLM: request_completion()
+    LLM-->>Agent: response
+    
+    Agent-->>Trace: end_span(metadata={tokens: 150})
+    Orchestrator-->>Trace: end_trace(cost=0.002)

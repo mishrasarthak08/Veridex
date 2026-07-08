@@ -1,0 +1,74 @@
+name: veridex
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: veridex_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-veridex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veridex_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-veridex_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-veridex} -d ${POSTGRES_DB:-veridex_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: veridex_redis
+    restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: veridex_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrantdata:/qdrant/storage
+
+  neo4j:
+    image: neo4j:latest
+    container_name: veridex_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/veridex_secret
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4jdata:/data
+
+  minio:
+    image: minio/minio
+    container_name: veridex_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+  qdrantdata:
+  neo4jdata:
+  miniodata:

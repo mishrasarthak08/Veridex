@@ -1,0 +1,3 @@
+weather:
+  name: get_weather
+  description: Gets the weather for a location

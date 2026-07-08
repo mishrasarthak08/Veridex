@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: veridex-vs
+spec:
+  hosts:
+  - veridex.internal
+  http:
+  - route:
+    - destination:
+        host: veridex
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes
+    timeout: 30s # 30s timeout for standard LLM completions

@@ -1,0 +1,17 @@
+gpt-4o:
+  provider: openai
+  type: chat
+  cost_per_1k_input: 0.005
+  cost_per_1k_output: 0.015
+
+claude-3-5-sonnet:
+  provider: anthropic
+  type: chat
+  cost_per_1k_input: 0.003
+  cost_per_1k_output: 0.015
+
+gemini-1.5-pro:
+  provider: gemini
+  type: chat
+  cost_per_1k_input: 0.0035
+  cost_per_1k_output: 0.0105

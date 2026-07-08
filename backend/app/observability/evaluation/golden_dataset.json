@@ -1,0 +1,18 @@
+[
+  {
+    "id": "eval_1",
+    "category": "Software Engineering",
+    "prompt": "Summarize the architectural differences between Next.js App Router and Pages Router.",
+    "expected_outcome": "Must mention Server Components, routing paradigms, and data fetching.",
+    "acceptable_score": 0.8,
+    "references": ["doc_nextjs_arch_1"]
+  },
+  {
+    "id": "eval_2",
+    "category": "Tool Use",
+    "prompt": "Check the status of Jira issue VER-123.",
+    "expected_outcome": "The agent must successfully call the read_jira_issue tool with VER-123.",
+    "acceptable_score": 1.0,
+    "references": []
+  }
+]

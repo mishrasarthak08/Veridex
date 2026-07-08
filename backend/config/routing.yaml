@@ -1,0 +1,5 @@
+default: "gpt-4o"
+reasoning: "claude-3-5-sonnet"
+coding: "claude-3-5-sonnet"
+cheap: "gemini-1.5-pro"
+vision: "gpt-4o"

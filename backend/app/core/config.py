@@ -1,0 +1,36 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "Veridex"
+    API_V1_STR: str = "/api/v1"
+    
+    POSTGRES_USER: str = "veridex"
+    POSTGRES_PASSWORD: str = "veridex_secret"
+    POSTGRES_DB: str = "veridex_db"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_SERVER: str = "localhost"
+    
+    REDIS_PORT: int = 6379
+    REDIS_SERVER: str = "localhost"
+    
+    # Auth
+    SECRET_KEY: str = "REPLACE_ME_WITH_STRONG_SECRET_IN_PROD"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
+    
+    # LLM Providers
+    OPENAI_API_KEY: str | None = None
+    
+    @property
+    def DATABASE_URI(self) -> str:
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    
+    # We will look for .env in the parent directory as well
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), ".env"), 
+        env_file_encoding="utf-8", 
+        extra="ignore"
+    )
+
+settings = Settings()
