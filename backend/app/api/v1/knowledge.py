@@ -9,7 +9,8 @@ from app.knowledge.chunking.recursive import RecursiveCharacterChunker
 from app.knowledge.embeddings.litellm_embedder import LiteLLMEmbedder
 from app.knowledge.indexing.vector_store import QdrantVectorStore
 from app.knowledge.indexing.sparse_store import BM25SparseStore
-from app.knowledge.graph.neo4j_store import Neo4jKnowledgeGraph
+from app.knowledge.graph.service import GraphService
+from app.knowledge.graph.repository import GraphRepository
 from app.knowledge.ingestion.pipeline import IngestionPipeline
 from app.knowledge.retrieval.hybrid import HybridRetriever
 
@@ -22,7 +23,7 @@ chunker = RecursiveCharacterChunker()
 embedder = LiteLLMEmbedder()
 vector_store = QdrantVectorStore()
 sparse_store = BM25SparseStore()
-graph_store = Neo4jKnowledgeGraph()
+graph_store = GraphService(GraphRepository())
 
 class SyncRequest(BaseModel):
     directory_path: str

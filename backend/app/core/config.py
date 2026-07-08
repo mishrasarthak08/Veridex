@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Veridex"
     API_V1_STR: str = "/api/v1"
     
+    # PostgreSQL
+    POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "veridex"
     POSTGRES_PASSWORD: str = "veridex_secret"
     POSTGRES_DB: str = "veridex_db"
@@ -28,6 +30,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "REPLACE_ME_WITH_STRONG_SECRET_IN_PROD"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
+    
+    # GitHub OAuth
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
     
     # LLM Providers
     OPENAI_API_KEY: str | None = None
