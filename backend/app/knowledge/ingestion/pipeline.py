@@ -138,6 +138,13 @@ class IngestionPipeline:
                         title=doc.get("title", doc["id"]),
                         chunks=graph_chunks
                     )
+                elif doc.get("source") == "jira_issue":
+                    await self.graph_store.ingest_jira_issue(
+                        doc_id=doc["id"],
+                        title=doc.get("title", doc["id"]),
+                        metadata=doc.get("source_metadata", {}),
+                        chunks=graph_chunks
+                    )
                 else:
                     project_id = doc.get("project_id", "unassigned_project")
                     await self.graph_store.ingest_document(

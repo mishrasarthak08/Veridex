@@ -129,6 +129,64 @@ class GraphService:
             "chunks": chunks
         })
 
+    async def ingest_jira_issue(self, doc_id: str, title: str, metadata: Dict[str, Any], chunks: List[Dict[str, Any]]):
+        """
+        Links Jira Issue to Project, Boards, Sprints, Users, and other Issues.
+        """
+        query = """
+        MERGE (d:Document {id: $doc_id})
+        SET d.title = $title, d.type = 'jira_issue', d.status = $status, d.priority = $priority
+        
+        // Link to Project
+        WITH d
+        WHERE $project_id IS NOT NULL
+        MERGE (p:Project {id: $project_id})
+        SET p.key = $project_key
+        MERGE (p)-[:CONTAINS]->(d)
+        
+        // Link Assignee
+        WITH d, p
+        WHERE $assignee_id IS NOT NULL
+        MERGE (u1:User {id: $assignee_id})
+        MERGE (u1)-[:ASSIGNED_TO]->(d)
+        
+        // Link Reporter
+        WITH d, p, u1
+        WHERE $reporter_id IS NOT NULL
+        MERGE (u2:User {id: $reporter_id})
+        MERGE (u2)-[:REPORTED]->(d)
+        
+        // Blocks
+        WITH d, p, u1, u2
+        UNWIND $blocks as block_key
+        MERGE (d2:Document {id: 'jira:' + block_key})
+        MERGE (d)-[:BLOCKS]->(d2)
+        
+        // Duplicates
+        WITH d, p, u1, u2
+        UNWIND $duplicates as dup_key
+        MERGE (d3:Document {id: 'jira:' + dup_key})
+        MERGE (d)-[:DUPLICATES]->(d3)
+        
+        WITH d
+        UNWIND $chunks as chunk
+        MERGE (c:Chunk {id: chunk.chunk_id})
+        MERGE (d)-[:HAS_CHUNK]->(c)
+        """
+        await self.repo.execute_write(query, {
+            "doc_id": doc_id,
+            "title": title,
+            "status": metadata.get("status"),
+            "priority": metadata.get("priority"),
+            "project_id": metadata.get("project_id"),
+            "project_key": metadata.get("project_key"),
+            "assignee_id": metadata.get("assignee_id"),
+            "reporter_id": metadata.get("reporter_id"),
+            "blocks": metadata.get("blocks", []),
+            "duplicates": metadata.get("duplicates", []),
+            "chunks": chunks
+        })
+
     # ==================
     # QUERIES
     # ==================
