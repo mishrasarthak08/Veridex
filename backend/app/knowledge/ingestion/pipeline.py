@@ -8,7 +8,7 @@ from ..chunking.base import BaseChunker
 from ..embeddings.base import BaseEmbedder
 from ..indexing.vector_store import QdrantVectorStore
 from ..indexing.sparse_store import BM25SparseStore
-from ..graph.neo4j_store import Neo4jKnowledgeGraph
+from ..graph.service import GraphService
 
 class IngestionPipeline:
     def __init__(
@@ -20,7 +20,7 @@ class IngestionPipeline:
         embedder: BaseEmbedder,
         vector_store: QdrantVectorStore,
         sparse_store: BM25SparseStore,
-        graph_store: Neo4jKnowledgeGraph
+        graph_store: GraphService
     ):
         self.connector = connector
         self.storage = storage
@@ -108,6 +108,25 @@ class IngestionPipeline:
                 raise e # We want the task queue to retry this failure
             
             # 7. Graph (Relationships)
-            await self.graph_store.add_document_entity(doc["id"], doc["title"])
+            # Ensure graph indexing fails gracefully without reverting MinIO and Qdrant success
+            try:
+                # We need a project ID to link to. Usually this comes from doc metadata.
+                # If not provided, we link to a default "unassigned" project.
+                project_id = doc.get("project_id", "unassigned_project")
+                
+                # Pass just the chunk IDs and metadata to Neo4j
+                graph_chunks = [{"chunk_id": c["chunk_id"]} for c in enriched_chunks]
+                
+                await self.graph_store.ingest_document(
+                    project_id=project_id,
+                    doc_id=doc["id"],
+                    title=doc.get("title", doc["id"]),
+                    chunks=graph_chunks
+                )
+            except Exception as e:
+                print(f"WARNING: Graph ingestion failed for document {doc['id']}: {e}")
+                # We do NOT raise here. 
+                # Qdrant and MinIO succeeded, so the document is fundamentally ingested.
+                # A background synchronization task can fix graph discrepancies later.
             
-            print(f"Successfully ingested {doc['title']} into Knowledge Platform")
+            print(f"Successfully ingested {doc.get('title', doc['id'])} into Knowledge Platform")
