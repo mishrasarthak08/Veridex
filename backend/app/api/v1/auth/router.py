@@ -173,6 +173,123 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)):
             "access_token": jwt_token,
             "token_type": "bearer"
         }
+@router.get("/google/login")
+async def google_login():
+    """
+    Redirects to Google OAuth authorize URL.
+    """
+    client_id = settings.GOOGLE_CLIENT_ID
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+    
+    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+    scopes = "openid email profile"
+    url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}&access_type=offline&prompt=consent"
+    return RedirectResponse(url)
+
+@router.get("/google/callback")
+async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
+    """
+    Exchanges code for Google access and refresh tokens, fetches user data, and issues JWT.
+    """
+    client_id = settings.GOOGLE_CLIENT_ID
+    client_secret = settings.GOOGLE_CLIENT_SECRET
+    
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+        
+    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+    
+    async with httpx.AsyncClient() as client:
+        # 1. Exchange code for access token and refresh token
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri
+            }
+        )
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token") # May be None if not prompted
+        
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Failed to get access token from Google")
+            
+        # 2. Fetch user profile
+        user_response = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        google_user = user_response.json()
+        google_id = str(google_user.get("sub"))
+        primary_email = google_user.get("email")
+        
+        if not google_id or not primary_email:
+            raise HTTPException(status_code=400, detail="Failed to get user profile from Google")
+            
+        # 3. Account Linking / Creation
+        oauth_result = await db.execute(
+            select(OAuthAccount).where(
+                OAuthAccount.provider == "google",
+                OAuthAccount.provider_account_id == google_id
+            )
+        )
+        oauth_account = oauth_result.scalar_one_or_none()
+        
+        if oauth_account:
+            user_id = oauth_account.user_id
+            # Update tokens
+            oauth_account.access_token = access_token
+            if refresh_token:
+                oauth_account.refresh_token = refresh_token
+            await db.commit()
+        else:
+            # Check if user with email exists
+            user_result = await db.execute(select(User).where(User.email == primary_email))
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                # Create new user
+                alphabet = string.ascii_letters + string.digits
+                random_password = ''.join(secrets.choice(alphabet) for i in range(20))
+                
+                user = User(
+                    email=primary_email,
+                    hashed_password=security.get_password_hash(random_password),
+                    first_name=google_user.get("given_name", ""),
+                    last_name=google_user.get("family_name", "")
+                )
+                db.add(user)
+                await db.flush()
+                
+            # Create OAuth Account
+            oauth_account = OAuthAccount(
+                user_id=user.id,
+                provider="google",
+                provider_account_id=google_id,
+                access_token=access_token,
+                refresh_token=refresh_token
+            )
+            db.add(oauth_account)
+            await db.commit()
+            
+            user_id = user.id
+            
+        # 4. Issue JWT
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        jwt_token = security.create_access_token(
+            user_id, expires_delta=access_token_expires
+        )
+        
+        return {
+            "access_token": jwt_token,
+            "token_type": "bearer"
+        }
+
 @router.post("/refresh")
 async def refresh_access_token(current_user: User = Depends(get_current_user)) -> Any:
     """
