@@ -97,6 +97,38 @@ class GraphService:
             "chunks": chunks
         })
 
+    async def ingest_notion_page(self, user_id: str, doc_id: str, parent_id: str, parent_type: str, title: str, chunks: List[Dict[str, Any]]):
+        """
+        Links a Notion Page to its parent (Workspace or Database).
+        Links the User to the Page (EDITED).
+        """
+        if parent_type == "database_id":
+            parent_label = "Database"
+        else:
+            parent_label = "Workspace"
+            
+        query = f"""
+        MERGE (p:{parent_label} {{id: $parent_id}})
+        MERGE (u:User {{id: $user_id}})
+        MERGE (d:Document {{id: $doc_id}})
+        SET d.title = $title, d.type = 'notion_page'
+        
+        MERGE (p)-[:CONTAINS]->(d)
+        MERGE (u)-[:EDITED]->(d)
+        
+        WITH d
+        UNWIND $chunks as chunk
+        MERGE (c:Chunk {{id: chunk.chunk_id}})
+        MERGE (d)-[:HAS_CHUNK]->(c)
+        """
+        await self.repo.execute_write(query, {
+            "user_id": user_id, 
+            "doc_id": doc_id, 
+            "parent_id": parent_id,
+            "title": title, 
+            "chunks": chunks
+        })
+
     # ==================
     # QUERIES
     # ==================

@@ -126,6 +126,18 @@ class IngestionPipeline:
                         title=doc.get("title", doc["id"]),
                         chunks=graph_chunks
                     )
+                elif doc.get("source") == "notion_page":
+                    user_id = doc.get("source_metadata", {}).get("last_edited_by", "unknown_user")
+                    parent_id = doc.get("source_metadata", {}).get("parent_id", "workspace")
+                    parent_type = doc.get("source_metadata", {}).get("parent_type", "workspace")
+                    await self.graph_store.ingest_notion_page(
+                        user_id=user_id,
+                        doc_id=doc["id"],
+                        parent_id=parent_id,
+                        parent_type=parent_type,
+                        title=doc.get("title", doc["id"]),
+                        chunks=graph_chunks
+                    )
                 else:
                     project_id = doc.get("project_id", "unassigned_project")
                     await self.graph_store.ingest_document(
