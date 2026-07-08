@@ -9,10 +9,15 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "veridex_secret"
     POSTGRES_DB: str = "veridex_db"
     POSTGRES_PORT: int = 5432
-    POSTGRES_SERVER: str = "localhost"
-    
-    REDIS_PORT: int = 6379
+    # Redis
     REDIS_SERVER: str = "localhost"
+    REDIS_PORT: int = 6379
+    
+    # MinIO
+    MINIO_ENDPOINT: str = "http://localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "veridex-knowledge"
     
     # Auth
     SECRET_KEY: str = "REPLACE_ME_WITH_STRONG_SECRET_IN_PROD"
