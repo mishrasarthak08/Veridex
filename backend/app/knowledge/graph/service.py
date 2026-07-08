@@ -187,6 +187,53 @@ class GraphService:
             "chunks": chunks
         })
 
+    async def ingest_slack_message(self, doc_id: str, title: str, metadata: Dict[str, Any], chunks: List[Dict[str, Any]]):
+        """
+        Links Slack message to Workspace, Channel, Thread, and User.
+        """
+        query = """
+        MERGE (w:Workspace {id: $workspace_id})
+        MERGE (ch:Channel {id: $channel_id})
+        MERGE (w)-[:HAS_CHANNEL]->(ch)
+        
+        MERGE (t:Thread {id: coalesce($thread_ts, $ts)})
+        MERGE (ch)-[:CONTAINS]->(t)
+        
+        MERGE (d:Document {id: $doc_id})
+        SET d.title = $title, d.type = 'slack_message', d.ts = $ts
+        MERGE (t)-[:CONTAINS]->(d)
+        
+        MERGE (u:User {id: $user_id})
+        MERGE (u)-[:POSTED]->(d)
+        
+        WITH d, t
+        UNWIND $chunks as chunk
+        MERGE (c:Chunk {id: chunk.chunk_id})
+        MERGE (d)-[:HAS_CHUNK]->(c)
+        """
+        
+        # If this is a reply to a thread, link REPLIES_TO
+        if metadata.get("is_thread_reply"):
+            query += """
+            WITH d
+            MERGE (root:Document {id: $root_msg_id})
+            MERGE (d)-[:REPLIES_TO]->(root)
+            """
+            
+        root_msg_id = f"slack:{metadata.get('workspace_id')}:{metadata.get('channel_id')}:{metadata.get('thread_ts')}" if metadata.get("is_thread_reply") else None
+        
+        await self.repo.execute_write(query, {
+            "workspace_id": metadata.get("workspace_id"),
+            "channel_id": metadata.get("channel_id"),
+            "thread_ts": metadata.get("thread_ts"),
+            "ts": metadata.get("ts"),
+            "user_id": metadata.get("user_id"),
+            "doc_id": doc_id,
+            "title": title,
+            "root_msg_id": root_msg_id,
+            "chunks": chunks
+        })
+
     # ==================
     # QUERIES
     # ==================

@@ -145,6 +145,13 @@ class IngestionPipeline:
                         metadata=doc.get("source_metadata", {}),
                         chunks=graph_chunks
                     )
+                elif doc.get("source") == "slack_message":
+                    await self.graph_store.ingest_slack_message(
+                        doc_id=doc["id"],
+                        title=doc.get("title", doc["id"]),
+                        metadata=doc.get("source_metadata", {}),
+                        chunks=graph_chunks
+                    )
                 else:
                     project_id = doc.get("project_id", "unassigned_project")
                     await self.graph_store.ingest_document(
