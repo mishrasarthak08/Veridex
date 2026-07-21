@@ -1,6 +1,8 @@
 import logging
+import asyncio
 from app.ai.events import ai_event_bus
 from app.ai.config import ai_config
+from app.agents.communication.bus import AgentBus
 
 logger = logging.getLogger("ai.telemetry")
 
@@ -8,6 +10,18 @@ class TelemetryTracker:
     def __init__(self):
         # Subscribe to ModelCalled events
         ai_event_bus.subscribe("ModelCalled", self.on_model_called)
+        self.bus = AgentBus()
+        
+    async def start_listening(self):
+        """Listen to global Redis bus for DAG traces."""
+        logger.info("TelemetryTracker starting to listen on system_events")
+        async for msg in self.bus.listen("system_events"):
+            # If we see dag info or goal completion, record it
+            if msg and "dag" in msg:
+                logger.info("Telemetry Record: DAG Started", extra={"telemetry": {"type": "dag_start", "dag": msg["dag"]}})
+            elif msg and "message" in msg and "completed" in msg["message"]:
+                logger.info("Telemetry Record: Goal Completed", extra={"telemetry": {"type": "goal_complete", "goal": msg.get("goal")}})
+
 
     def on_model_called(self, data: dict):
         # Calculate cost based on usage and models.yaml

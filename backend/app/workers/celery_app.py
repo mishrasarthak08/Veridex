@@ -1,8 +1,8 @@
 from celery import Celery
-import os
+from app.core.config import settings
 
 # Use Redis as the message broker and result backend
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = f"redis://{settings.REDIS_SERVER}:{settings.REDIS_PORT}/0"
 
 celery_app = Celery(
     "veridex_workers",

@@ -4,12 +4,14 @@ from typing import Dict, Any, List
 from app.agents.orchestrator.manager import Orchestrator
 from app.agents.approval.layer import HumanApprovalLayer
 from sse_starlette.sse import EventSourceResponse
-
+from app.agents.communication.bus import AgentBus
+import json
 router = APIRouter()
 
 # Global instances for now
 orchestrator = Orchestrator()
 approval_layer = HumanApprovalLayer()
+agent_bus = AgentBus()
 
 class GoalRequest(BaseModel):
     goal: str
@@ -42,10 +44,12 @@ async def submit_approval(decision: ApprovalDecision):
 async def execution_timeline():
     """
     SSE Endpoint for streaming the Execution Timeline UI in real-time.
-    (Placeholder implementation)
+    Listens to the 'system_events' channel on the AgentBus.
     """
     async def event_generator():
-        yield {"event": "timeline_update", "data": "Connecting to Agent Bus..."}
-        # In a real app, subscribe to AgentBus here and yield events
+        yield {"event": "timeline_update", "data": json.dumps({"message": "Connecting to Agent Bus..."})}
+        
+        async for event_data in agent_bus.listen("system_events"):
+            yield {"event": "timeline_update", "data": json.dumps(event_data)}
         
     return EventSourceResponse(event_generator())

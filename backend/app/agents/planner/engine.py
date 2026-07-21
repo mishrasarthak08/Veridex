@@ -2,32 +2,37 @@ from typing import Dict, Any, List
 import uuid
 
 class TaskNode:
-    def __init__(self, description: str, agent_role: str, dependencies: List[str] = None):
-        self.id = str(uuid.uuid4())
+    def __init__(self, description: str, agent_role: str, dependencies: List[str] = None, id: str = None):
+        self.id = id if id else str(uuid.uuid4())
         self.description = description
         self.agent_role = agent_role
         self.dependencies = dependencies or []
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "description": self.description,
+            "agent_role": self.agent_role,
+            "dependencies": self.dependencies,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TaskNode":
+        return cls(
+            id=data.get("id"),
+            description=data.get("description"),
+            agent_role=data.get("agent_role"),
+            dependencies=data.get("dependencies", [])
+        )
+
 class PlanningEngine:
     async def decompose(self, goal: str) -> List[TaskNode]:
         """
-        In a real scenario, this asks an LLM (like GPT-4o or Claude 3.5 Sonnet) 
-        to break down the goal into a DAG of TaskNodes.
-        For now, we simulate a hardcoded DAG.
+        For Phase 1, we use a fixed single-step execution strategy.
+        This de-risks the queue plumbing separately from LLM planning logic.
         """
-        # Simulated DAG
-        research_task = TaskNode(
-            description=f"Research context for: {goal}", 
-            agent_role="Researcher"
+        execution_task = TaskNode(
+            description=goal, 
+            agent_role="Executor"
         )
-        write_task = TaskNode(
-            description="Write a summary report based on research", 
-            agent_role="Writer",
-            dependencies=[research_task.id]
-        )
-        review_task = TaskNode(
-            description="Review the report for quality and accuracy", 
-            agent_role="Critic",
-            dependencies=[write_task.id]
-        )
-        return [research_task, write_task, review_task]
+        return [execution_task]

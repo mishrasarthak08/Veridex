@@ -25,8 +25,24 @@ def main():
         print(f"Logged in successfully using token: {args.token[:5]}...")
     elif args.command == "agent-run":
         client = Client(api_key="cli_auth")
-        response = client.agents.run(goal=args.goal)
-        print(response)
+        print(f"Submitting goal: '{args.goal}'")
+        try:
+            response = client.agents.run(goal=args.goal)
+            print(f"Goal submitted successfully. Streaming timeline...\n")
+            
+            for event in client.agents.stream_timeline():
+                event_type = event.get('event')
+                data = event.get('data', {})
+                
+                if isinstance(data, dict):
+                    msg = data.get('message', str(data))
+                else:
+                    msg = str(data)
+                    
+                print(f"[{event_type}] {msg}")
+                
+        except Exception as e:
+            print(f"Error: {e}")
     else:
         parser.print_help()
 

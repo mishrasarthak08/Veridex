@@ -76,10 +76,10 @@ class QdrantVectorStore:
             if conditions:
                 qdrant_filter = Filter(must=conditions)
                 
-        results = await self.client.search(
+        results = await self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=qdrant_filter,
             limit=limit
         )
-        return [{"id": hit.id, "score": hit.score, "payload": hit.payload} for hit in results]
+        return [{"id": hit.id, "score": hit.score, "payload": hit.payload} for hit in results.points]

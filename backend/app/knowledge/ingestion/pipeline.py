@@ -71,8 +71,13 @@ class IngestionPipeline:
             enriched_chunks = []
             ids = []
             
+            import uuid
+            
             for idx, (c, ctext) in enumerate(zip(chunks, chunk_texts)):
-                chunk_id = f"{doc['id']}_chunk_{idx}"
+                # Qdrant requires UUIDs or unsigned integers for point IDs
+                # We use uuid5 to create a deterministic UUID from the string ID
+                raw_chunk_id = f"{doc['id']}_chunk_{idx}"
+                chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, raw_chunk_id))
                 ids.append(chunk_id)
                 
                 # Enterprise Metadata Injection
@@ -113,7 +118,7 @@ class IngestionPipeline:
                 # We need a project ID to link to. Usually this comes from doc metadata.
                 # If not provided, we link to a default "unassigned" project.
                 
-                graph_chunks = [{"chunk_id": c["chunk_id"]} for c in enriched_chunks]
+                graph_chunks = [{"chunk_id": c["metadata"]["chunk_id"]} for c in enriched_chunks]
                 
                 if doc.get("source") == "gmail_email":
                     # For emails, we link to User and Thread instead of Project

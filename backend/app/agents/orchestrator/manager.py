@@ -16,6 +16,9 @@ class Orchestrator:
         print(f"[Orchestrator] Decomposing goal: {goal}")
         dag = await self.planner.decompose(goal)
         
+        dag_info = [{"id": task.id, "dependencies": task.dependencies} for task in dag]
+        await self.bus.publish("system_events", {"message": f"Decomposed goal into {len(dag)} tasks", "dag": dag_info})
+        
         for task in dag:
             self.tasks[task.id] = task
             if not task.dependencies:
@@ -36,4 +39,5 @@ class Orchestrator:
                         if not self.scheduler.is_queued(task.id):
                             await self.scheduler.enqueue(task)
                             
+        await self.bus.publish("system_events", {"message": "Goal completed successfully.", "goal": goal})
         print(f"[Orchestrator] Goal completed successfully.")

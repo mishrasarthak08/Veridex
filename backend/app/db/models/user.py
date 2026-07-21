@@ -15,3 +15,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
+
+    roles: Mapped[List["Role"]] = relationship(
+        "Role", secondary="user_roles", back_populates="users"
+    )

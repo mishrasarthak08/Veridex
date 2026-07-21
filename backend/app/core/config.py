@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     
     # LLM Providers
     OPENAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
     
     @property
     def DATABASE_URI(self) -> str:

@@ -49,3 +49,36 @@ async def get_current_active_superuser(
             status_code=403, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+from app.services.policy_service import PolicyService
+from app.governance.audit import ImmutableAuditLog
+
+def enforce_policy(resource: str, action: str):
+    """
+    FastAPI dependency factory to enforce OPA-style YAML policies on a route.
+    Usage: @router.get("/", dependencies=[Depends(enforce_policy("project", "read"))])
+    """
+    async def _enforce_policy(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        policy_service = PolicyService()
+        decision = await policy_service.evaluate(db, str(current_user.id), resource, action)
+        
+        audit_log = ImmutableAuditLog()
+        await audit_log.log_action(
+            tenant_id="default_tenant", # Could extract from current_user or request
+            actor=str(current_user.id),
+            action=action,
+            resource=resource,
+            details={"policy_reason": decision.reason},
+            decision="ALLOW" if decision.allow else "DENY",
+            policy_id=decision.policy_id
+        )
+
+        if not decision.allow:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Forbidden by policy: {decision.reason}")
+            
+        return current_user
+        
+    return _enforce_policy

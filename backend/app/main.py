@@ -23,6 +23,14 @@ from app.api.v1.api import api_router
 # Add API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+from app.ai.telemetry.tracker import tracker
+import asyncio
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(tracker.start_listening())
+
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to Veridex API Platform"}
