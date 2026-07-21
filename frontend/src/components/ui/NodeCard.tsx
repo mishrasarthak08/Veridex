@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { StatusPill, StatusType } from './StatusPill';
 
 interface NodeCardProps {
@@ -29,18 +30,28 @@ export function NodeCard({ id, subtitle, status, iconColor }: NodeCardProps) {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-[#0B0E12] shadow-sm">
+    <motion.div 
+      layout
+      whileHover={{ scale: 1.02, y: -2 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-[#0B0E12] shadow-sm hover:border-white/15 hover:shadow-xl hover:shadow-black/50 hover:bg-white/[0.03] transition-colors cursor-default group"
+    >
       <div className="flex items-center gap-4">
         {/* Icon Slot: A hollow circle */}
-        <div className={`w-4 h-4 rounded-full border-2 ${getIconColor()}`} />
+        <div className="relative">
+          <motion.div 
+            layout
+            className={`w-4 h-4 rounded-full border-2 ${getIconColor()} transition-colors duration-300 group-hover:shadow-[0_0_8px_rgba(255,255,255,0.1)]`} 
+          />
+        </div>
         
         {/* Identifier and Subtitle */}
         <div className="flex flex-col gap-1">
-          <div className="font-mono text-[13px] text-[#F6F4EF]">{id}</div>
+          <motion.div layout className="font-mono text-[13px] text-[#F6F4EF] transition-colors group-hover:text-white">{id}</motion.div>
           {subtitle && (
-            <div className="font-mono text-[11px] text-[#F6F4EF]/50">
+            <motion.div layout className="font-mono text-[11px] text-[#F6F4EF]/50 transition-colors group-hover:text-[#F6F4EF]/80">
               {subtitle}
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
@@ -49,6 +60,6 @@ export function NodeCard({ id, subtitle, status, iconColor }: NodeCardProps) {
       <div>
         <StatusPill status={status} />
       </div>
-    </div>
+    </motion.div>
   );
 }

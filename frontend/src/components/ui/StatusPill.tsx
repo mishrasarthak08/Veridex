@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 export type StatusType = 'queued' | 'running' | 'done' | 'blocked' | 'trace' | 'degraded';
 
@@ -33,12 +34,28 @@ export function StatusPill({ status }: StatusPillProps) {
     trace: 'trace',
   };
 
+  const isActive = normalizedStatus === 'running' || normalizedStatus === 'trace';
+
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-mono leading-none ${colorMap[normalizedStatus]}`}
     >
-      <div className={`w-1.5 h-1.5 rounded-full ${dotColorMap[normalizedStatus]}`} />
+      <div className="relative flex items-center justify-center">
+        <motion.div 
+          className={`w-1.5 h-1.5 rounded-full ${dotColorMap[normalizedStatus]}`} 
+        />
+        {isActive && (
+          <motion.div
+            className={`absolute w-full h-full rounded-full ${dotColorMap[normalizedStatus]}`}
+            animate={{ scale: [1, 2.5], opacity: [0.6, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+          />
+        )}
+      </div>
       <span>{textMap[normalizedStatus]}</span>
-    </div>
+    </motion.div>
   );
 }
