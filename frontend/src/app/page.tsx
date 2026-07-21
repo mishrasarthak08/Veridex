@@ -1,7 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
+import dagre from "dagre";
+import { submitGoal, getTimelineUrl } from "../lib/api";
 import { StatusPill } from "../components/ui/StatusPill";
 
 // Stagger variants for the DAG nodes
@@ -10,20 +12,194 @@ const containerVariants: Variants = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.2
+      staggerChildren: 0.1,
+      delayChildren: 0.1
     }
   }
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 10, scale: 0.95 },
-  show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  hidden: { opacity: 0, scale: 0.8 },
+  show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
+type NodeStatus = "queued" | "running" | "completed" | "blocked";
+
+interface DagNode {
+  id: string;
+  status: NodeStatus;
+  x: number;
+  y: number;
+}
+
+interface DagEdge {
+  source: string;
+  target: string;
+  path: string;
+}
+
+interface TraceEvent {
+  time: Date;
+  message: string;
+  type: "info" | "tool" | "system";
+}
+
 export default function Home() {
+  const [goalInput, setGoalInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [nodes, setNodes] = useState<DagNode[]>([]);
+  const [edges, setEdges] = useState<DagEdge[]>([]);
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  
+  const [traces, setTraces] = useState<TraceEvent[]>([]);
+  
+  // Real-time EventSource listener
+  useEffect(() => {
+    // Initialize a sample DAG
+    const initSampleDag = () => {
+      const sampleDag = [
+        { id: "analyze_request", dependencies: [] },
+        { id: "fetch_context", dependencies: ["analyze_request"] },
+        { id: "generate_plan", dependencies: ["analyze_request"] },
+        { id: "execute_plan", dependencies: ["fetch_context", "generate_plan"] },
+        { id: "verify_results", dependencies: ["execute_plan"] }
+      ];
+      
+      const g = new dagre.graphlib.Graph();
+      g.setGraph({ rankdir: "LR", align: "UL", marginx: 40, marginy: 40, ranksep: 80, nodesep: 40 });
+      g.setDefaultEdgeLabel(() => ({}));
+      
+      sampleDag.forEach((n: { id: string, dependencies: string[] }) => g.setNode(n.id, { width: 100, height: 40 }));
+      sampleDag.forEach((n: { id: string, dependencies: string[] }) => {
+        n.dependencies.forEach((dep: string) => g.setEdge(dep, n.id));
+      });
+      
+      dagre.layout(g);
+      
+      const computedNodes: DagNode[] = g.nodes().map(v => {
+        const node = g.node(v);
+        return { id: v, status: "queued" as NodeStatus, x: node.x, y: node.y };
+      });
+      
+      const computedEdges: DagEdge[] = g.edges().map(e => {
+        const edge = g.edge(e);
+        const start = edge.points[0];
+        const end = edge.points[edge.points.length - 1];
+        return {
+          source: e.v, target: e.w,
+          path: `M ${start.x} ${start.y} C ${(start.x + end.x)/2} ${start.y}, ${(start.x + end.x)/2} ${end.y}, ${end.x} ${end.y}`
+        };
+      });
+      
+      setNodes(computedNodes);
+      setEdges(computedEdges);
+      setTraces([{ time: new Date(), message: "System initialized with sample workflow.", type: "system" }]);
+    };
+    
+    initSampleDag();
+
+    const es = new EventSource(getTimelineUrl());
+    
+    es.addEventListener("timeline_update", (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        console.log("SSE Payload:", payload);
+        
+        if (payload.event === "dag_created" && payload.dag) {
+          // Compute DAG layout
+          const g = new dagre.graphlib.Graph();
+          g.setGraph({ rankdir: "LR", align: "UL", marginx: 40, marginy: 40, ranksep: 80, nodesep: 40 });
+          g.setDefaultEdgeLabel(() => ({}));
+          
+          payload.dag.forEach((n: { id: string, dependencies: string[] }) => {
+            g.setNode(n.id, { width: 100, height: 40 });
+          });
+          
+          payload.dag.forEach((n: { id: string, dependencies: string[] }) => {
+            if (n.dependencies) {
+              n.dependencies.forEach((dep: string) => {
+                g.setEdge(dep, n.id);
+              });
+            }
+          });
+          
+          dagre.layout(g);
+          
+          const computedNodes: DagNode[] = g.nodes().map(v => {
+            const node = g.node(v);
+            return {
+              id: v,
+              status: "queued" as NodeStatus,
+              x: node.x,
+              y: node.y
+            };
+          });
+          
+          const computedEdges: DagEdge[] = g.edges().map(e => {
+            const edge = g.edge(e);
+            const start = edge.points[0];
+            const end = edge.points[edge.points.length - 1];
+            // Smooth bezier curve connecting start and end
+            const path = `M ${start.x} ${start.y} C ${(start.x + end.x)/2} ${start.y}, ${(start.x + end.x)/2} ${end.y}, ${end.x} ${end.y}`;
+            return {
+              source: e.v,
+              target: e.w,
+              path
+            };
+          });
+          
+          setNodes(computedNodes);
+          setEdges(computedEdges);
+          setTraces(prev => [...prev, { time: new Date(), message: `DAG Generated: ${payload.dag.length} tasks`, type: "system" }]);
+        }
+        else if (payload.event === "task_started") {
+          setNodes(prev => prev.map(n => n.id === payload.task_id ? { ...n, status: "running" } : n));
+          setTraces(prev => [...prev, { time: new Date(), message: `Task started: ${payload.task_id}`, type: "info" }]);
+        }
+        else if (payload.event === "task_completed") {
+          setNodes(prev => prev.map(n => n.id === payload.task_id ? { ...n, status: "completed" } : n));
+          setTraces(prev => [...prev, { time: new Date(), message: `Task completed: ${payload.task_id}`, type: "info" }]);
+        }
+        else if (payload.event === "goal_completed") {
+          setTraces(prev => [...prev, { time: new Date(), message: `Goal accomplished.`, type: "system" }]);
+        }
+        else if (payload.message) {
+          setTraces(prev => [...prev, { time: new Date(), message: payload.message, type: "system" }]);
+        }
+      } catch (err) {
+        console.error("Error parsing SSE:", err);
+      }
+    });
+
+    return () => es.close();
+  }, []);
+
+  const handleGoalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!goalInput.trim()) return;
+    
+    setIsSubmitting(true);
+    setNodes([]);
+    setEdges([]);
+    setTraces([]);
+    
+    try {
+      await submitGoal(goalInput);
+      setGoalInput("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const activeCount = nodes.filter(n => n.status === "running").length;
+  const completedCount = nodes.filter(n => n.status === "completed").length;
+  const queuedCount = nodes.filter(n => n.status === "queued").length;
+
   return (
-    <div className="min-h-screen bg-[#0B0E12] font-body text-[#F6F4EF] selection:bg-[#4C9FE8]/30">
+    <div className="min-h-screen bg-[#0B0E12] font-body text-[#F6F4EF] selection:bg-[#4C9FE8]/30 flex flex-col">
       
       {/* Top Header */}
       <motion.header 
@@ -34,234 +210,209 @@ export default function Home() {
       >
         <div className="flex items-center gap-2 text-sm">
           <span className="font-display font-bold tracking-widest text-[#F6F4EF]">VERIDEX</span>
-          <span className="font-mono text-xs text-[#F6F4EF]/50">acme-corp / support-ops</span>
+          <span className="font-mono text-xs text-[#F6F4EF]/50">orchestration / dynamic-dag</span>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusPill status="running" />
+        
+        {/* Goal Submission Form */}
+        <form onSubmit={handleGoalSubmit} className="flex-1 max-w-xl mx-8 relative">
+          <input
+            type="text"
+            value={goalInput}
+            onChange={(e) => setGoalInput(e.target.value)}
+            placeholder="Enter a new goal for the Orchestrator..."
+            className="w-full bg-[#141820] border border-white/10 rounded-full px-5 py-2 text-sm focus:outline-none focus:border-[#4C9FE8]/50 focus:ring-1 focus:ring-[#4C9FE8]/50 transition-all font-mono placeholder:text-white/20"
+            disabled={isSubmitting}
+          />
+          <button 
+            type="submit" 
+            disabled={isSubmitting || !goalInput.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 bg-[#4C9FE8]/10 text-[#4C9FE8] rounded-full text-xs font-mono hover:bg-[#4C9FE8]/20 transition-colors disabled:opacity-50"
+          >
+            EXECUTE &rarr;
+          </button>
+        </form>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <StatusPill status={activeCount > 0 ? "running" : "queued"} />
           <div className="flex gap-2 font-mono text-[11px]">
+            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#2FAE86]/20 bg-[#2FAE86]/10 text-[#2FAE86] cursor-default transition-colors">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#2FAE86]" />
+              <span>{completedCount} done</span>
+            </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#F5A623]/20 bg-[#F5A623]/10 text-[#F5A623] cursor-default transition-colors hover:bg-[#F5A623]/20">
               <div className="w-1.5 h-1.5 rounded-full bg-[#F5A623]" />
-              <span>7 running</span>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#E0483D]/20 bg-[#E0483D]/10 text-[#E0483D] cursor-default transition-colors hover:bg-[#E0483D]/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#E0483D]" />
-              <span>1 blocked</span>
+              <span>{activeCount} active</span>
             </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-zinc-500/20 bg-zinc-500/10 text-zinc-500 cursor-default transition-colors hover:bg-zinc-500/20">
               <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-              <span>12 queued</span>
+              <span>{queuedCount} queued</span>
             </motion.div>
           </div>
         </div>
       </motion.header>
 
       {/* Main Console Area */}
-      <main className="p-6 max-w-6xl mx-auto space-y-6">
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-3 gap-6">
         
-        {/* Run Container */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden hover:border-white/10 transition-colors shadow-2xl shadow-black/50"
-        >
-          {/* Run Header */}
-          <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-xs text-[#F6F4EF]/70">run #a91f-plan</span>
-              <span className="font-mono text-xs text-[#F6F4EF]">&middot;</span>
-              <span className="font-mono text-xs text-[#F6F4EF]">"reconcile weekly billing exceptions"</span>
-            </div>
-            <span className="font-mono text-xs text-[#F6F4EF]/50">t+00:42</span>
-          </div>
-
-          {/* DAG Canvas (Static Mockup with Animations) */}
+        {/* Left Col: DAG Canvas */}
+        <div className="col-span-2 flex flex-col gap-6">
           <motion.div 
-            variants={containerVariants}
-            initial="hidden"
-            animate="show"
-            className="relative h-[320px] p-6 overflow-hidden"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden hover:border-white/10 transition-colors shadow-2xl shadow-black/50 flex-1 min-h-[500px] flex flex-col"
           >
-            
-            {/* Trace lines */}
-            <motion.div 
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
-              style={{ originX: 0 }}
-              className="absolute top-1/2 left-[64px] w-24 h-px bg-[#4C9FE8]/30" 
-            />
-            
-            <svg className="absolute top-0 left-[144px] w-48 h-full pointer-events-none" style={{ zIndex: 0 }}>
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 0.4 }}
-                 d="M 0 160 C 40 160, 40 80, 80 80" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 0.5 }}
-                 d="M 0 160 C 40 160, 40 240, 80 240" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 0.6 }}
-                 d="M 0 160 L 80 160" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-            </svg>
-
-            <svg className="absolute top-0 left-[240px] w-32 h-full pointer-events-none" style={{ zIndex: 0 }}>
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 0.7 }}
-                 d="M 0 80 C 40 80, 40 120, 80 120" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-               {/* Animated flowing trace line */}
-               <motion.path 
-                 initial={{ pathLength: 0, strokeDashoffset: 0 }} 
-                 animate={{ pathLength: 1, strokeDashoffset: -20 }} 
-                 transition={{ 
-                   pathLength: { duration: 0.8, delay: 0.8 },
-                   strokeDashoffset: { duration: 1, repeat: Infinity, ease: "linear" } 
-                 }}
-                 d="M 0 160 C 40 160, 40 120, 80 120" fill="transparent" stroke="#F5A623" strokeWidth="2" strokeDasharray="4 4" 
-               />
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 0.9 }}
-                 d="M 0 248 C 40 248, 40 280, 80 280" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-               <motion.path 
-                 initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: 1.0 }}
-                 d="M 80 120 L 160 120" fill="transparent" stroke="rgba(246, 244, 239, 0.2)" strokeWidth="1" 
-               />
-            </svg>
-
-            {/* Nodes */}
-            <motion.div variants={itemVariants} className="absolute top-1/2 left-12 -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <div className="w-4 h-4 rounded-full border-2 border-[#4C9FE8] group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(76,159,232,0.4)] transition-all" />
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">plan</span>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="absolute top-1/2 left-32 -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <div className="w-4 h-4 rounded-full border-2 border-[#2FAE86] group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(47,174,134,0.4)] transition-all" />
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">split</span>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="absolute top-[72px] left-56 -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">fetch.invoices</span>
-              <div className="w-4 h-4 rounded-full border-2 border-[#2FAE86] group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(47,174,134,0.4)] transition-all" />
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="absolute top-[160px] left-56 -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">fetch.usage_logs</span>
-              <div className="w-4 h-4 rounded-full border-2 border-[#F5A623] group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(245,166,35,0.4)] transition-all" />
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="absolute top-[248px] left-56 -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <div className="w-4 h-4 rounded-full border-2 border-[#E0483D] group-hover:scale-125 group-hover:shadow-[0_0_12px_rgba(224,72,61,0.4)] transition-all" />
-              <span className="font-mono text-[11px] text-[#E0483D] group-hover:text-[#E0483D]/80 transition-colors">policy.export_scope</span>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="absolute top-[120px] left-[330px] -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">reconcile</span>
-              <div className="w-5 h-5 rounded-full border-2 border-[#F5A623] flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_16px_rgba(245,166,35,0.4)] transition-all">
-                 <motion.div 
-                   animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }} 
-                   transition={{ duration: 2, repeat: Infinity }}
-                   className="w-1.5 h-1.5 bg-[#F5A623] rounded-full" 
-                 />
+            <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs text-[#F6F4EF]/70">live orchestrator graph</span>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div variants={itemVariants} className="absolute top-[120px] left-[450px] -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">draft_summary</span>
-              <div className="w-4 h-4 rounded-full border-2 border-zinc-600 group-hover:scale-125 transition-all" />
-            </motion.div>
+            <div className="relative flex-1 overflow-auto p-8">
+              {nodes.length === 0 ? (
+                <div className="absolute inset-0 flex items-center justify-center text-white/20 font-mono text-sm">
+                  Waiting for goal decomposition...
+                </div>
+              ) : (
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="show"
+                  className="relative"
+                  style={{ width: '100%', height: '100%' }}
+                >
+                  {/* SVG Canvas for Edges */}
+                  <svg className="absolute inset-0 pointer-events-none w-full h-full" style={{ zIndex: 0, overflow: 'visible' }}>
+                    {edges.map((edge, i) => (
+                      <React.Fragment key={edge.source + "-" + edge.target}>
+                        {/* Static faint path */}
+                        <motion.path 
+                          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: i * 0.1 }}
+                          d={edge.path} fill="transparent" stroke="rgba(246, 244, 239, 0.1)" strokeWidth="1.5" 
+                        />
+                        {/* Animated flowing path if source is completed and target is not, or just a flowing dash array */}
+                        <motion.path 
+                          initial={{ pathLength: 0, strokeDashoffset: 0, opacity: 0 }} 
+                          animate={{ pathLength: 1, strokeDashoffset: -20, opacity: 1 }} 
+                          transition={{ 
+                            pathLength: { duration: 0.8, delay: i * 0.1 + 0.2 },
+                            strokeDashoffset: { duration: 1, repeat: Infinity, ease: "linear" } 
+                          }}
+                          d={edge.path} fill="transparent" stroke="#4C9FE8" strokeWidth="1" strokeDasharray="4 4" 
+                        />
+                      </React.Fragment>
+                    ))}
+                  </svg>
 
-            <motion.div variants={itemVariants} className="absolute top-[280px] left-[330px] -translate-y-1/2 flex flex-col items-center gap-2 group cursor-pointer">
-              <div className="w-4 h-4 rounded-full border-2 border-zinc-600 group-hover:scale-125 transition-all" />
-              <span className="font-mono text-[11px] text-[#F6F4EF]/50 group-hover:text-[#F6F4EF] transition-colors">await policy</span>
-            </motion.div>
+                  {/* Render Nodes */}
+                  {nodes.map((node) => {
+                    const isRunning = node.status === "running";
+                    const isCompleted = node.status === "completed";
+                    const isSelected = selectedNode === node.id;
+                    
+                    let color = "#71717A"; // zinc-500 for queued
+                    if (isRunning) color = "#F5A623";
+                    if (isCompleted) color = "#2FAE86";
 
-            {/* Blocked Alert Banner at bottom of DAG */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.2, type: "spring", stiffness: 400, damping: 30 }}
-              className="absolute bottom-6 left-6 right-6 px-4 py-3 bg-[#1A1210] border border-[#E0483D]/20 rounded-lg flex items-center justify-between shadow-lg shadow-black/40 backdrop-blur-md"
-            >
-               <span className="font-mono text-[11px] text-[#E0483D]">policy.export_scope blocked run at step 3 — awaiting workspace admin approval</span>
-               <button className="font-mono text-[11px] text-[#F5A623] hover:text-[#F5A623]/80 transition-colors">Review &rarr;</button>
-            </motion.div>
+                    return (
+                      <motion.div 
+                        key={node.id}
+                        variants={itemVariants} 
+                        className="absolute flex flex-col items-center justify-center gap-2 group cursor-pointer"
+                        style={{ 
+                          // center the node on its dagre coordinates
+                          left: node.x - 50, 
+                          top: node.y - 20,
+                          width: 100,
+                          height: 40,
+                          zIndex: isSelected ? 10 : 1
+                        }}
+                        onClick={() => setSelectedNode(node.id)}
+                      >
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center bg-[#0B0E12]"
+                          style={{ 
+                            borderColor: color, 
+                            boxShadow: (isRunning || isSelected) ? `0 0 16px ${color}66` : "none",
+                            transform: isSelected ? 'scale(1.25)' : 'scale(1)'
+                          }}
+                        >
+                          {isRunning && (
+                            <motion.div 
+                              animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }} 
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                              className="w-1.5 h-1.5 rounded-full" 
+                              style={{ backgroundColor: color }}
+                            />
+                          )}
+                          {isCompleted && (
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                          )}
+                        </div>
+                        <span 
+                          className="font-mono text-[10px] transition-colors whitespace-nowrap bg-[#0B0E12]/80 px-1 rounded"
+                          style={{ color: isRunning ? "#F6F4EF" : "#F6F4EF80" }}
+                        >
+                          {node.id}
+                        </span>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </div>
           </motion.div>
-        </motion.div>
+        </div>
 
-        {/* Selected Node Detail Panel */}
+        {/* Right Col: Trace Logs */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="rounded-xl border border-white/5 bg-white/[0.02] p-6 space-y-6 hover:border-white/10 transition-colors backdrop-blur-sm shadow-xl shadow-black/30"
+          className="rounded-xl border border-white/5 bg-white/[0.02] p-6 flex flex-col hover:border-white/10 transition-colors backdrop-blur-sm shadow-xl shadow-black/30"
         >
-          <header>
-            <h3 className="font-mono text-[10px] tracking-widest text-[#F6F4EF]/50 uppercase mb-4">Selected Node &middot; Reconcile</h3>
-            <div className="flex flex-col gap-1">
-              <div className="font-mono text-sm text-[#F6F4EF]">worker.reconcile_exceptions</div>
-              <div className="font-mono text-[11px] text-[#F6F4EF]/50">gemini-2.5-pro &middot; started t+00:31</div>
-            </div>
+          <header className="mb-4">
+            <h3 className="font-mono text-[10px] tracking-widest text-[#F6F4EF]/50 uppercase">Execution Trace</h3>
           </header>
 
-          <div className="h-px bg-white/5 w-full" />
+          <div className="h-px bg-white/5 w-full mb-4" />
 
-          <section>
-            <h4 className="font-mono text-[10px] tracking-widest text-[#F6F4EF]/50 uppercase mb-4">Inputs Resolved</h4>
-            <div className="font-mono text-[11px] space-y-2">
-              <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 transition-transform cursor-default">
-                <span className="text-[#F6F4EF]/70 w-32">invoices.q3</span>
-                <span className="text-[#2FAE86]">&#10003; 214 rows</span>
-              </motion.div>
-              <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 transition-transform cursor-default">
-                <span className="text-[#F6F4EF]/70 w-32">usage_logs.q3</span>
-                <motion.span 
-                  animate={{ opacity: [1, 0.5, 1] }} 
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                  className="text-[#F5A623]"
-                >&#8987; streaming</motion.span>
-              </motion.div>
-            </div>
-          </section>
-
-          <div className="h-px bg-white/5 w-full" />
-
-          <section>
-            <h4 className="font-mono text-[10px] tracking-widest text-[#F6F4EF]/50 uppercase mb-4">Trace</h4>
-            <div className="font-mono text-[11px] text-[#F6F4EF]/50 space-y-2">
-              <motion.div whileHover={{ x: 4 }} className="flex items-start gap-4 transition-transform cursor-default">
-                <span className="w-16 shrink-0">t+00:31</span>
-                <span className="hover:text-[#F6F4EF] transition-colors">step started</span>
-              </motion.div>
-              <motion.div whileHover={{ x: 4 }} className="flex items-start gap-4 transition-transform cursor-default">
-                <span className="w-16 shrink-0">t+00:33</span>
-                <span className="text-[#4C9FE8] hover:text-[#4C9FE8]/80 transition-colors">+ tool_call: qdrant.search</span>
-              </motion.div>
-              <motion.div whileHover={{ x: 4 }} className="flex items-start gap-4 transition-transform cursor-default">
-                <span className="w-16 shrink-0">t+00:38</span>
-                <span className="text-[#4C9FE8] hover:text-[#4C9FE8]/80 transition-colors">+ tool_call: neo4j.match</span>
-              </motion.div>
-              <motion.div whileHover={{ x: 4 }} className="flex items-start gap-4 transition-transform cursor-default">
-                <span className="w-16 shrink-0">t+00:41</span>
-                <span className="hover:text-[#F6F4EF] transition-colors">awaiting stream close</span>
-              </motion.div>
-            </div>
-          </section>
+          <div className="flex-1 overflow-y-auto space-y-3 font-mono text-[11px] pr-2 custom-scrollbar">
+            {traces.length === 0 ? (
+              <div className="text-white/20">Awaiting events...</div>
+            ) : (
+              traces.map((trace, idx) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-start gap-3"
+                >
+                  <span className="text-white/30 shrink-0">
+                    {trace.time.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' })}
+                  </span>
+                  <span className={
+                    trace.type === "system" ? "text-[#F5A623]" :
+                    trace.type === "info" ? "text-white/80" : "text-[#4C9FE8]"
+                  }>
+                    {trace.message}
+                  </span>
+                </motion.div>
+              ))
+            )}
+            {/* Automatic scroll anchor */}
+            <div className="h-4" />
+          </div>
         </motion.div>
 
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 1 }}
-          className="font-body text-[12px] text-[#F6F4EF]/40 mt-8 leading-relaxed max-w-3xl"
-        >
-          Reading order, deliberately: status counts first (top right), then the shape of the run, then one node's detail on demand. Nothing here is invented — qdrant.search and neo4j.match are literal calls this stack already makes; the console just makes them visible as they happen.
-        </motion.p>
-
       </main>
+      
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}} />
     </div>
   );
 }

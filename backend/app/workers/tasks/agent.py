@@ -18,10 +18,20 @@ def execute_task(self, task_definition: Dict[str, Any]) -> Dict[str, Any]:
             runtime = AgentRuntime()
             bus = AgentBus()
             
+            # Notify frontend task has started
+            await bus.publish("system_events", {"event": "task_started", "task_id": task_id})
+            
             result = await runtime.execute(goal)
             
             # Publish result to bus
             await bus.publish(f"task_completed:{task_id}", {"result": result, "task_id": task_id})
+            
+            # Notify Orchestrator
+            await bus.publish("TaskCompleted", task_id)
+            
+            # Notify Frontend
+            await bus.publish("system_events", {"event": "task_completed", "task_id": task_id, "result": result})
+            
             return result
 
         result = asyncio.run(_run_agent())
