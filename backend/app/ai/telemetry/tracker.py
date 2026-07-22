@@ -4,6 +4,9 @@ from app.ai.events import ai_event_bus
 from app.ai.config import ai_config
 from app.agents.communication.bus import AgentBus
 
+from app.db.session import AsyncSessionLocal
+from app.db.models.telemetry import AILog
+
 logger = logging.getLogger("ai.telemetry")
 
 class TelemetryTracker:
@@ -22,8 +25,7 @@ class TelemetryTracker:
             elif msg and "message" in msg and "completed" in msg["message"]:
                 logger.info("Telemetry Record: Goal Completed", extra={"telemetry": {"type": "goal_complete", "goal": msg.get("goal")}})
 
-
-    def on_model_called(self, data: dict):
+    async def on_model_called(self, data: dict):
         # Calculate cost based on usage and models.yaml
         usage = data.get("usage", {})
         model = data.get("model")
@@ -42,5 +44,22 @@ class TelemetryTracker:
 
         # Log to structured logger (JSON)
         logger.info("AI Telemetry Record", extra={"telemetry": data})
+        
+        # Persist to database
+        try:
+            async with AsyncSessionLocal() as session:
+                log_record = AILog(
+                    task_id=data.get("task_id"),
+                    model=model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cost_usd=total_cost,
+                    latency_ms=data.get("latency_ms", 0),
+                    metadata_={"raw": data}
+                )
+                session.add(log_record)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to persist AILog to database: {e}")
 
 tracker = TelemetryTracker()

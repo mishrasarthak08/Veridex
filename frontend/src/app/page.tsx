@@ -243,7 +243,7 @@ export default function Home() {
         </form>
 
         <div className="flex items-center gap-2 shrink-0">
-          <StatusPill status={viewMode === "graph" ? "completed" : (activeCount > 0 ? "running" : "queued")} />
+          <StatusPill status={viewMode === "graph" ? "done" : (activeCount > 0 ? "running" : "queued")} />
           <div className="flex gap-2 font-mono text-[11px]">
             {viewMode === "graph" ? (
               <motion.div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#4C9FE8]/20 bg-[#4C9FE8]/10 text-[#4C9FE8]">

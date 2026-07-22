@@ -7,6 +7,7 @@ from app.api.v1.agents import router as agents_router
 from app.api.v1.connectors import router as connectors_router
 from app.api.v1.observability import router as observability_router
 from app.api.v1.governance import router as governance_router
+from app.api.v1.telemetry import router as telemetry_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -17,3 +18,4 @@ api_router.include_router(agents_router, prefix="/agents", tags=["agents"])
 api_router.include_router(connectors_router, prefix="/connectors", tags=["connectors"])
 api_router.include_router(observability_router, prefix="/observability", tags=["observability"])
 api_router.include_router(governance_router, prefix="/governance", tags=["governance"])
+api_router.include_router(telemetry_router, prefix="/telemetry", tags=["telemetry"])

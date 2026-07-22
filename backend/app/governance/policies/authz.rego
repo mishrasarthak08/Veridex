@@ -25,23 +25,23 @@ default allow := false
 # or we can write rules based on generic tenant matching.
 
 # 1. Hard Tenant Isolation: User's org_id MUST match resource's org_id
-tenant_match {
+tenant_match if {
     input.user.organization_id == input.resource.organization_id
 }
 
 # 2. System Admins can do anything
-allow {
+allow if {
     "system_admin" in input.user.roles
 }
 
 # 3. Org Admins can do anything within their org
-allow {
+allow if {
     tenant_match
     "org_admin" in input.user.roles
 }
 
 # 4. Workspace Admins can perform actions on resources in their workspace
-allow {
+allow if {
     tenant_match
     "workspace_admin" in input.user.roles
     # In a real setup, we'd verify the user is actually a workspace_admin FOR THIS SPECIFIC workspace.
@@ -49,7 +49,7 @@ allow {
 }
 
 # 5. Members can read resources in their org
-allow {
+allow if {
     tenant_match
     input.action == "read"
     "org_member" in input.user.roles

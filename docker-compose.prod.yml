@@ -79,6 +79,7 @@ services:
       REDIS_SERVER: redis
       MINIO_ENDPOINT: http://minio:9000
       NEO4J_URI: bolt://neo4j:7687
+      OPA_URL: http://opa:8181
     ports:
       - "8000:8000"
     depends_on:
@@ -108,6 +109,7 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       NEO4J_URI: bolt://neo4j:7687
       QDRANT_HOST: qdrant
+      OPA_URL: http://opa:8181
     depends_on:
       db:
         condition: service_healthy
@@ -132,6 +134,21 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - backend
+      
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: veridex_opa
+    restart: always
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr"
+      - ":8181"
+      - "/policies"
+    volumes:
+      - ./backend/app/governance/policies:/policies
 
 volumes:
   pgdata:

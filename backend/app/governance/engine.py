@@ -31,6 +31,8 @@ class PolicyEngine:
                 
             if response.status_code == 200:
                 result = response.json()
+                print(f"OPA Payload: {payload}")
+                print(f"OPA Response: {result}")
                 # OPA returns {"result": true|false}
                 return result.get("result", False)
             else:
@@ -39,6 +41,5 @@ class PolicyEngine:
                 return False
                 
         except Exception as e:
-            print(f"Policy evaluation failed: {e}. Bypassing for Phase 7 development.")
-            # Fail closed normally, but for Phase 7 testing we bypass
-            return True
+            print(f"Policy evaluation failed: {e}. Failing closed.")
+            return False

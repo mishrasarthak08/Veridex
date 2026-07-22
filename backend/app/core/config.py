@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = "veridex_secret"
     
+    # OPA Governance
+    OPA_URL: str = "http://localhost:8181"
+    
     # Auth
     SECRET_KEY: str = "REPLACE_ME_WITH_STRONG_SECRET_IN_PROD"
     ALGORITHM: str = "HS256"
