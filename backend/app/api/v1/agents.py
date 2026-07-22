@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List
 from app.agents.orchestrator.manager import Orchestrator
-from app.agents.approval.layer import HumanApprovalLayer
+from app.agents.approval.layer import global_approval_layer
 from sse_starlette.sse import EventSourceResponse
 from app.agents.communication.bus import AgentBus
 import json
@@ -10,7 +10,7 @@ router = APIRouter()
 
 # Global instances for now
 orchestrator = Orchestrator()
-approval_layer = HumanApprovalLayer()
+approval_layer = global_approval_layer
 agent_bus = AgentBus()
 
 class GoalRequest(BaseModel):

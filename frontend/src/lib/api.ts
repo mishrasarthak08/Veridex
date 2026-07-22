@@ -35,3 +35,19 @@ export async function fetchGraph() {
 
   return response.json();
 }
+
+export async function submitApproval(taskId: string, decision: 'approve' | 'reject' | 'revise') {
+  const response = await fetch(`${API_BASE_URL}/agents/approve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task_id: taskId, decision }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to submit approval: ${response.statusText}`);
+  }
+
+  return response.json();
+}

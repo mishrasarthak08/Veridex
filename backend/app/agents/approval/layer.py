@@ -26,3 +26,5 @@ class HumanApprovalLayer:
         if task_id in self.pending_approvals:
             self.decisions[task_id] = decision
             self.pending_approvals[task_id].set()
+
+global_approval_layer = HumanApprovalLayer()

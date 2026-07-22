@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import dagre from "dagre";
-import { submitGoal, getTimelineUrl, fetchGraph } from "../lib/api";
+import { submitGoal, getTimelineUrl, fetchGraph, submitApproval } from "../lib/api";
 import { StatusPill } from "../components/ui/StatusPill";
 
 const containerVariants: Variants = {
@@ -51,6 +51,7 @@ export default function Home() {
   const [edges, setEdges] = useState<DagEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [traces, setTraces] = useState<TraceEvent[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<{task_id: string, context: string} | null>(null);
   
   // Fetch Knowledge Graph
   useEffect(() => {
@@ -157,6 +158,10 @@ export default function Home() {
         else if (payload.event === "task_completed") {
           setNodes(prev => prev.map(n => n.id === payload.task_id ? { ...n, status: "completed" } : n));
           setTraces(prev => [...prev, { time: new Date(), message: `Task completed: ${payload.task_id}`, type: "info" }]);
+        }
+        else if (payload.event === "approval_requested") {
+          setPendingApproval({ task_id: payload.task_id, context: payload.context });
+          setTraces(prev => [...prev, { time: new Date(), message: `Human approval required for task: ${payload.task_id}`, type: "system" }]);
         }
       } catch (err) {
         console.error("Error parsing SSE:", err);
@@ -415,6 +420,51 @@ export default function Home() {
           </div>
         </motion.div>
       </main>
+
+      {pendingApproval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#141820] border border-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#E54D2E]/20 flex items-center justify-center text-[#E54D2E]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
+              <div>
+                <h3 className="text-[#F6F4EF] font-display font-bold">Action Requires Approval</h3>
+                <p className="text-white/40 text-xs font-mono mt-0.5">Task ID: {pendingApproval.task_id}</p>
+              </div>
+            </div>
+            
+            <div className="bg-black/40 rounded p-4 mb-6 border border-white/5 font-mono text-sm text-white/80">
+              {pendingApproval.context}
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button 
+                onClick={() => submitApproval(pendingApproval.task_id, 'reject').then(() => setPendingApproval(null))}
+                className="px-4 py-2 rounded font-mono text-xs text-white/60 hover:text-white/90 transition-colors"
+              >
+                Reject Action
+              </button>
+              <button 
+                onClick={() => submitApproval(pendingApproval.task_id, 'revise').then(() => setPendingApproval(null))}
+                className="px-4 py-2 rounded font-mono text-xs border border-white/10 text-white/80 hover:bg-white/5 transition-colors"
+              >
+                Ask to Revise
+              </button>
+              <button 
+                onClick={() => submitApproval(pendingApproval.task_id, 'approve').then(() => setPendingApproval(null))}
+                className="px-4 py-2 rounded font-mono text-xs bg-[#E54D2E] text-white hover:bg-[#E54D2E]/80 transition-colors shadow-lg shadow-[#E54D2E]/20"
+              >
+                Approve & Execute
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
       
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
