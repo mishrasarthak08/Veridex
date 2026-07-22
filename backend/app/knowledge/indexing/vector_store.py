@@ -8,7 +8,9 @@ import uuid
 import httpx
 
 class QdrantVectorStore:
-    def __init__(self, host: str = "localhost", port: int = 6333, collection_name: str = "veridex_knowledge"):
+    def __init__(self, host: str = None, port: int = 6333, collection_name: str = "veridex_knowledge"):
+        import os
+        host = host or os.getenv("QDRANT_HOST", "localhost")
         # We use AsyncQdrantClient for non-blocking IO
         self.client = AsyncQdrantClient(host=host, port=port)
         self.collection_name = collection_name

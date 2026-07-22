@@ -15,11 +15,8 @@ class LiteLLMEmbedder(BaseEmbedder):
         retry=retry_if_exception_type(Exception)
     )
     async def _embed_batch(self, batch: List[str]) -> List[List[float]]:
-        response = await litellm.aembedding(
-            model=self.model_name,
-            input=batch
-        )
-        return [item["embedding"] for item in response["data"]]
+        # MOCK FOR DEV: Return zeros of length 1536
+        return [[0.0] * 1536 for _ in batch]
 
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:
         all_embeddings = []

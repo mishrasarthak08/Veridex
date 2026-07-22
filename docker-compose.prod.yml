@@ -99,7 +99,7 @@ services:
       dockerfile: Dockerfile
     container_name: veridex_worker
     restart: always
-    command: uv run celery -A app.workers.celery_app worker --loglevel=info -Q celery,planner_queue,agent_queue
+    command: uv run celery -A app.workers.celery_app worker --loglevel=info -Q celery,planner_queue,agent_queue,ingestion_queue
     env_file:
       - .env
     environment:
@@ -107,6 +107,7 @@ services:
       REDIS_SERVER: redis
       MINIO_ENDPOINT: http://minio:9000
       NEO4J_URI: bolt://neo4j:7687
+      QDRANT_HOST: qdrant
     depends_on:
       db:
         condition: service_healthy

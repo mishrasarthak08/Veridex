@@ -49,12 +49,26 @@ class MinioStorage(BaseStorage):
     async def upload(self, object_name: str, data: bytes, content_type: str = "text/plain") -> str:
         """Asynchronously upload bytes to MinIO/S3."""
         async with self._get_client() as s3:
-            await s3.put_object(
-                Bucket=self.bucket,
-                Key=object_name,
-                Body=data,
-                ContentType=content_type
-            )
+            try:
+                await s3.put_object(
+                    Bucket=self.bucket,
+                    Key=object_name,
+                    Body=data,
+                    ContentType=content_type
+                )
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code')
+                if error_code == 'NoSuchBucket':
+                    await self.ensure_bucket_exists()
+                    # Retry
+                    await s3.put_object(
+                        Bucket=self.bucket,
+                        Key=object_name,
+                        Body=data,
+                        ContentType=content_type
+                    )
+                else:
+                    raise
             # The returned path mimics standard S3 URIs
             return f"s3://{self.bucket}/{object_name}"
 

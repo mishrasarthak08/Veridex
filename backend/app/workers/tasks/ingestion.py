@@ -14,9 +14,16 @@ def process_ingestion_job(self, document_id: str, doc_type: str, raw_text: str, 
     5. Store graph structure in Neo4j
     """
     
-    # We use a helper async runner for Celery since the internal tools are async
     def _run_async(coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+            
+        if loop and loop.is_running():
+            return loop.create_task(coro)
+        else:
+            return asyncio.run(coro)
 
     try:
         from app.knowledge.chunking.factory import ChunkerFactory
@@ -70,4 +77,73 @@ def process_ingestion_job(self, document_id: str, doc_type: str, raw_text: str, 
 
     except Exception as exc:
         print(f"Error processing ingestion job: {exc}")
+        self.retry(exc=exc)
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
+    """
+    Background job to run a full ingestion pipeline for a given connector.
+    """
+    def _run_async(coro):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+            
+        if loop and loop.is_running():
+            return loop.create_task(coro)
+        else:
+            return asyncio.run(coro)
+        
+    try:
+        from app.knowledge.connectors.filesystem import FileSystemConnector
+        from app.knowledge.connectors.github import GitHubConnector
+        from app.knowledge.storage.minio_store import MinioStorage
+        from app.knowledge.parsers.base import DocumentParser
+        from app.knowledge.chunking.recursive import RecursiveCharacterChunker
+        from app.knowledge.embeddings.litellm_embedder import LiteLLMEmbedder
+        from app.knowledge.indexing.vector_store import QdrantVectorStore
+        from app.knowledge.indexing.sparse_store import BM25SparseStore
+        from app.knowledge.graph.service import GraphService
+        from app.knowledge.graph.repository import GraphRepository
+        from app.knowledge.ingestion.pipeline import IngestionPipeline
+
+        print(f"Starting sync job for connector: {connector_type} with config: {config}")
+
+        if connector_type == "filesystem":
+            connector = FileSystemConnector(root_dir=config.get("directory_path", "./"))
+        elif connector_type == "github":
+            connector = GitHubConnector(
+                access_token=config.get("access_token", "dummy_token"),
+                repository_full_name=config.get("repository_full_name", "")
+            )
+        else:
+            raise ValueError(f"Unsupported connector type: {connector_type}")
+
+        # Instantiate components
+        storage = MinioStorage()
+        parser = DocumentParser()
+        chunker = RecursiveCharacterChunker()
+        embedder = LiteLLMEmbedder()
+        vector_store = QdrantVectorStore()
+        _run_async(vector_store.ensure_collection_exists())
+        sparse_store = BM25SparseStore()
+        
+        repo = GraphRepository()
+        graph_store = GraphService(repo)
+
+        pipeline = IngestionPipeline(
+            connector, storage, parser, chunker, embedder, vector_store, sparse_store, graph_store
+        )
+        
+        # Execute the pipeline
+        _run_async(pipeline.run())
+        
+        # Cleanup
+        _run_async(repo.close())
+
+        print(f"Sync job complete for connector: {connector_type}")
+
+    except Exception as exc:
+        print(f"Error processing sync_connector_job: {exc}")
         self.retry(exc=exc)

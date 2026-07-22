@@ -25,22 +25,23 @@ vector_store = QdrantVectorStore()
 sparse_store = BM25SparseStore()
 graph_store = GraphService(GraphRepository())
 
+from app.workers.tasks.ingestion import sync_connector_job
+
 class SyncRequest(BaseModel):
-    directory_path: str
+    connector_type: str
+    config: Dict[str, Any]
 
 class RetrieveRequest(BaseModel):
     query: str
     limit: int = 5
 
 @router.post("/sync")
-async def trigger_sync(request: SyncRequest, background_tasks: BackgroundTasks):
-    connector = FileSystemConnector(root_dir=request.directory_path)
-    pipeline = IngestionPipeline(
-        connector, storage, parser, chunker, embedder, vector_store, sparse_store, graph_store
+async def trigger_sync(request: SyncRequest):
+    # Dispatch to Celery using apply_async
+    task = sync_connector_job.apply_async(
+        args=[request.connector_type, request.config]
     )
-    # Run async in background
-    background_tasks.add_task(pipeline.run)
-    return {"status": "Sync triggered successfully"}
+    return {"status": "Sync triggered successfully", "task_id": task.id}
 
 @router.post("/retrieve")
 async def retrieve_knowledge(request: RetrieveRequest):

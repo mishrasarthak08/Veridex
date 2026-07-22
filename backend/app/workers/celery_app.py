@@ -8,7 +8,7 @@ celery_app = Celery(
     "veridex_workers",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["app.workers.tasks.planner", "app.workers.tasks.agent"]
+    include=["app.workers.tasks.planner", "app.workers.tasks.agent", "app.workers.tasks.ingestion"]
 )
 
 celery_app.conf.update(
@@ -20,5 +20,6 @@ celery_app.conf.update(
     task_routes={
         "app.workers.tasks.planner.*": {"queue": "planner_queue"},
         "app.workers.tasks.agent.*": {"queue": "agent_queue"},
+        "app.workers.tasks.ingestion.*": {"queue": "ingestion_queue"},
     }
 )
