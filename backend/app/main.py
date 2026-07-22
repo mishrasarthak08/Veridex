@@ -22,7 +22,10 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+from app.core.middleware import RequestContextMiddleware, OPAMiddleware
+
 # Add Middleware
+app.add_middleware(OPAMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
 # Add Exception Handlers

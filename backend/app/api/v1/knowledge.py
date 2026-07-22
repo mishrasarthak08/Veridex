@@ -47,3 +47,52 @@ async def retrieve_knowledge(request: RetrieveRequest):
     retriever = HybridRetriever(embedder, vector_store, sparse_store)
     results = await retriever.retrieve(request.query, limit=request.limit)
     return {"query": request.query, "results": results}
+
+@router.get("/graph")
+async def get_graph_data():
+    """
+    Fetches the Knowledge Graph structure (nodes and edges) for UI visualization.
+    """
+    query = """
+    MATCH (n)
+    OPTIONAL MATCH (n)-[r]->(m)
+    RETURN n, r, m
+    """
+    repo = GraphRepository()
+    records = await repo.execute_query(query)
+    
+    nodes = {}
+    edges = []
+    
+    for record in records:
+        n = record["n"]
+        if n:
+            n_id = n.get("id") or str(n.element_id)
+            nodes[n_id] = {
+                "id": n_id,
+                "label": list(n.labels)[0] if n.labels else "Unknown",
+                "properties": dict(n)
+            }
+            
+        r = record["r"]
+        m = record["m"]
+        if r and m:
+            m_id = m.get("id") or str(m.element_id)
+            nodes[m_id] = {
+                "id": m_id,
+                "label": list(m.labels)[0] if m.labels else "Unknown",
+                "properties": dict(m)
+            }
+            edges.append({
+                "source": n_id,
+                "target": m_id,
+                "type": r.type
+            })
+            
+    await repo.close()
+    
+    return {
+        "nodes": list(nodes.values()),
+        "edges": edges
+    }
+

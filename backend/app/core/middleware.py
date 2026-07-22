@@ -38,3 +38,46 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         )
         
         return response
+
+from fastapi.responses import JSONResponse
+from app.governance.engine import PolicyEngine
+
+class OPAMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app):
+        super().__init__(app)
+        self.policy_engine = PolicyEngine()
+        
+    async def dispatch(self, request: Request, call_next):
+        # We only protect API routes
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+            
+        # In a real app, user_context would be populated by an Authentication middleware (e.g. JWT validation)
+        # For this phase, we mock the user context if not present in request.state
+        if not hasattr(request.state, "user"):
+            # Mock admin user for demonstration purposes, normally this blocks if no user
+            request.state.user = {
+                "id": "u_dev",
+                "roles": ["system_admin"],
+                "organization_id": "org_default"
+            }
+            
+        user_context = request.state.user
+        action = request.method.lower()
+        
+        # We can pass path params or query params as resource context
+        # Or parse the URL to determine resource type
+        resource_context = {
+            "type": "api_endpoint",
+            "path": request.url.path,
+            # For strict tenancy, we assume the resource org matches the user org unless specified
+            "organization_id": user_context.get("organization_id")
+        }
+        
+        allowed = await self.policy_engine.evaluate(user_context, action, resource_context)
+        
+        if not allowed:
+            logger.warning(f"OPA Denied access for {user_context.get('id')} on {action} {request.url.path}")
+            return JSONResponse(status_code=403, content={"detail": "Forbidden by OPA Policy"})
+            
+        return await call_next(request)

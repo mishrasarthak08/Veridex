@@ -20,3 +20,18 @@ export async function submitGoal(goal: string) {
 export function getTimelineUrl() {
   return `${API_BASE_URL}/agents/timeline`;
 }
+
+export async function fetchGraph() {
+  const response = await fetch(`${API_BASE_URL}/knowledge/graph`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch graph: ${response.statusText}`);
+  }
+
+  return response.json();
+}
