@@ -1,13 +1,13 @@
 from app.workers.celery_app import celery_app
 from typing import Dict, Any
 import asyncio
-from app.ai.runtime.agent import AgentRuntime
+from app.agents.execution.engine import AgentExecutor
 from app.agents.communication.bus import AgentBus
 
 @celery_app.task(name="app.workers.tasks.agent.execute_task", bind=True, max_retries=3)
 def execute_task(self, task_definition: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Worker task that executes a specific agentic subtask.
+    Worker task that executes a specific agentic subtask using the AgentExecutor ReAct loop.
     """
     try:
         goal = task_definition.get("description", "No description provided")
@@ -15,13 +15,14 @@ def execute_task(self, task_definition: Dict[str, Any]) -> Dict[str, Any]:
         print(f"Executing agent task: {goal}")
         
         async def _run_agent():
-            runtime = AgentRuntime()
+            # Use default workspace and gemini flash for fast execution
+            executor = AgentExecutor(workspace_id="default_workspace", model_name="gemini/gemini-2.5-flash")
             bus = AgentBus()
             
             # Notify frontend task has started
             await bus.publish("system_events", {"event": "task_started", "task_id": task_id})
             
-            result = await runtime.execute(goal)
+            result = await executor.execute_task(goal)
             
             # Publish result to bus
             await bus.publish(f"task_completed:{task_id}", {"result": result, "task_id": task_id})
