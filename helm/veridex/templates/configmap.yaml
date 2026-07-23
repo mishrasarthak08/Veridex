@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+data:
+  POSTGRES_SERVER: "{{ .Release.Name }}-postgres"
+  POSTGRES_USER: "{{ .Values.config.postgresUser }}"
+  POSTGRES_DB: "{{ .Values.config.postgresDb }}"
+  POSTGRES_PORT: "{{ .Values.config.postgresPort }}"
+  REDIS_SERVER: "{{ .Release.Name }}-redis"
+  REDIS_PORT: "{{ .Values.config.redisPort }}"
+  MINIO_USER: "{{ .Values.config.minioUser }}"
+  MINIO_ENDPOINT: "http://{{ .Release.Name }}-minio:9000"
+  NEO4J_URI: "bolt://{{ .Release.Name }}-neo4j:7687"
+  QDRANT_HOST: "{{ .Release.Name }}-qdrant"
+  OPA_URL: "http://{{ .Release.Name }}-opa:8181"
+  NEXT_PUBLIC_API_URL: "http://{{ .Release.Name }}-backend:8000"

@@ -110,12 +110,19 @@ def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
 
         print(f"Starting sync job for connector: {connector_type} with config: {config}")
 
+        from app.core.config import settings
+
         if connector_type == "filesystem":
             connector = FileSystemConnector(root_dir=config.get("directory_path", "./"))
         elif connector_type == "github":
             connector = GitHubConnector(
-                access_token=config.get("access_token", "dummy_token"),
+                access_token=config.get("access_token") or settings.GITHUB_TOKEN,
                 repository_full_name=config.get("repository_full_name", "")
+            )
+        elif connector_type == "slack":
+            from app.knowledge.connectors.slack import SlackConnector
+            connector = SlackConnector(
+                bot_token=config.get("bot_token") or settings.SLACK_BOT_TOKEN
             )
         else:
             raise ValueError(f"Unsupported connector type: {connector_type}")

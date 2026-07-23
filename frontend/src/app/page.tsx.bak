@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import dagre from "dagre";
-import { submitGoal, getTimelineUrl, submitApproval } from "../lib/api";
 import { StatusPill } from "../components/ui/StatusPill";
 
 const containerVariants: Variants = {
@@ -39,12 +38,13 @@ interface DagEdge {
 interface TraceEvent {
   time: Date;
   message: string;
-  type: "info" | "tool" | "system" | "success";
+  type: "info" | "tool" | "system";
 }
 
 export default function Home() {
   const [goalInput, setGoalInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<"dag" | "graph">("graph");
   
   const [nodes, setNodes] = useState<DagNode[]>([]);
   const [edges, setEdges] = useState<DagEdge[]>([]);
@@ -52,10 +52,60 @@ export default function Home() {
   const [traces, setTraces] = useState<TraceEvent[]>([]);
   const [pendingApproval, setPendingApproval] = useState<{task_id: string, context: string} | null>(null);
   
-
+  // Fetch Knowledge Graph
+  useEffect(() => {
+    if (viewMode !== "graph") return;
+    
+    let isMounted = true;
+    const loadGraph = async () => {
+      try {
+        if (!isMounted) return;
+        
+        const g = new dagre.graphlib.Graph();
+        g.setGraph({ rankdir: "LR", align: "UL", marginx: 40, marginy: 40, ranksep: 100, nodesep: 50 });
+        g.setDefaultEdgeLabel(() => ({}));
+        
+        data.nodes.forEach((n: any) => {
+          g.setNode(n.id, { width: 120, height: 40, label: n.properties?.name || n.properties?.title || n.label });
+        });
+        
+        data.edges.forEach((e: any) => {
+          g.setEdge(e.source, e.target, { label: e.type });
+        });
+        
+        dagre.layout(g);
+        
+        const computedNodes: DagNode[] = g.nodes().map(v => {
+          const node = g.node(v);
+          return { id: v, label: node.label, status: "kg_node", x: node.x, y: node.y };
+        });
+        
+        const computedEdges: DagEdge[] = g.edges().map(e => {
+          const edge = g.edge(e);
+          const start = edge.points[0];
+          const end = edge.points[edge.points.length - 1];
+          return {
+            source: e.v, target: e.w, label: edge.label,
+            path: `M ${start.x} ${start.y} C ${(start.x + end.x)/2} ${start.y}, ${(start.x + end.x)/2} ${end.y}, ${end.x} ${end.y}`
+          };
+        });
+        
+        setNodes(computedNodes);
+        setEdges(computedEdges);
+      } catch (err) {
+        console.error("Failed to load Knowledge Graph", err);
+      }
+    };
+    
+    loadGraph();
+    
+    return () => { isMounted = false; };
+  }, [viewMode]);
 
   // DAG SSE Listener
   useEffect(() => {
+    if (viewMode !== "dag") return;
+
     // Reset view
     setNodes([]);
     setEdges([]);
@@ -105,16 +155,7 @@ export default function Home() {
         }
         else if (payload.event === "task_completed") {
           setNodes(prev => prev.map(n => n.id === payload.task_id ? { ...n, status: "completed" } : n));
-          setTraces(prev => [
-            ...prev, 
-            { time: new Date(), message: `Task completed: ${payload.task_id}`, type: "info" }
-          ]);
-          if (payload.result) {
-            setTraces(prev => [
-              ...prev,
-              { time: new Date(), message: `Result:\n${payload.result}`, type: "success" }
-            ]);
-          }
+          setTraces(prev => [...prev, { time: new Date(), message: `Task completed: ${payload.task_id}`, type: "info" }]);
         }
         else if (payload.event === "approval_requested") {
           setPendingApproval({ task_id: payload.task_id, context: payload.context });
@@ -126,13 +167,14 @@ export default function Home() {
     });
 
     return () => es.close();
-  }, []);
+  }, [viewMode]);
 
   const handleGoalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!goalInput.trim()) return;
     
     setIsSubmitting(true);
+    if (viewMode !== "dag") setViewMode("dag");
     
     setNodes([]);
     setEdges([]);
@@ -151,6 +193,7 @@ export default function Home() {
   const activeCount = nodes.filter(n => n.status === "running").length;
   const completedCount = nodes.filter(n => n.status === "completed").length;
   const queuedCount = nodes.filter(n => n.status === "queued").length;
+  const kgCount = nodes.filter(n => n.status === "kg_node").length;
 
   return (
     <div className="min-h-screen bg-[#0B0E12] font-body text-[#F6F4EF] selection:bg-[#4C9FE8]/30 flex flex-col">
@@ -162,7 +205,21 @@ export default function Home() {
         className="px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-sm bg-[#0B0E12]/80 sticky top-0 z-10"
       >
         <div className="flex items-center gap-4 text-sm">
-          <span className="font-display font-bold tracking-widest text-[#F6F4EF]">VERIDEX ORCHESTRATOR</span>
+          <span className="font-display font-bold tracking-widest text-[#F6F4EF]">VERIDEX</span>
+          <div className="flex bg-white/5 rounded-full p-1 font-mono text-[10px]">
+            <button 
+              onClick={() => setViewMode("graph")}
+              className={`px-3 py-1 rounded-full transition-colors ${viewMode === "graph" ? "bg-[#4C9FE8]/20 text-[#4C9FE8]" : "text-white/40 hover:text-white/80"}`}
+            >
+              KNOWLEDGE GRAPH
+            </button>
+            <button 
+              onClick={() => setViewMode("dag")}
+              className={`px-3 py-1 rounded-full transition-colors ${viewMode === "dag" ? "bg-[#4C9FE8]/20 text-[#4C9FE8]" : "text-white/40 hover:text-white/80"}`}
+            >
+              EXECUTION DAG
+            </button>
+          </div>
         </div>
         
         <form onSubmit={handleGoalSubmit} className="flex-1 max-w-xl mx-8 relative">
@@ -184,8 +241,14 @@ export default function Home() {
         </form>
 
         <div className="flex items-center gap-2 shrink-0">
-          <StatusPill status={activeCount > 0 ? "running" : "queued"} />
+          <StatusPill status={viewMode === "graph" ? "done" : (activeCount > 0 ? "running" : "queued")} />
           <div className="flex gap-2 font-mono text-[11px]">
+            {viewMode === "graph" ? (
+              <motion.div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#4C9FE8]/20 bg-[#4C9FE8]/10 text-[#4C9FE8]">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#4C9FE8]" />
+                <span>{kgCount} entities</span>
+              </motion.div>
+            ) : (
               <>
                 <motion.div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[#2FAE86]/20 bg-[#2FAE86]/10 text-[#2FAE86]">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#2FAE86]" />
@@ -200,6 +263,7 @@ export default function Home() {
                   <span>{queuedCount} queued</span>
                 </motion.div>
               </>
+            )}
           </div>
         </div>
       </motion.header>
@@ -215,7 +279,7 @@ export default function Home() {
             <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-xs text-[#F6F4EF]/70">
-                  live orchestrator graph
+                  {viewMode === "graph" ? "knowledge graph overview" : "live orchestrator graph"}
                 </span>
               </div>
             </div>
@@ -223,7 +287,7 @@ export default function Home() {
             <div className="relative flex-1 overflow-auto p-8">
               {nodes.length === 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center text-white/20 font-mono text-sm">
-                  Waiting for goal decomposition...
+                  {viewMode === "graph" ? "Loading Knowledge Graph..." : "Waiting for goal decomposition..."}
                 </div>
               ) : (
                 <motion.div 
@@ -240,12 +304,18 @@ export default function Home() {
                           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, delay: i * 0.1 }}
                           d={edge.path} fill="transparent" stroke="rgba(246, 244, 239, 0.1)" strokeWidth="1.5" 
                         />
-                        <motion.path 
-                          initial={{ pathLength: 0, strokeDashoffset: 0, opacity: 0 }} 
-                          animate={{ pathLength: 1, strokeDashoffset: -20, opacity: 1 }} 
-                          transition={{ pathLength: { duration: 0.8, delay: i * 0.1 + 0.2 }, strokeDashoffset: { duration: 1, repeat: Infinity, ease: "linear" } }}
-                          d={edge.path} fill="transparent" stroke="#4C9FE8" strokeWidth="1" strokeDasharray="4 4" 
-                        />
+                        {viewMode === "dag" ? (
+                          <motion.path 
+                            initial={{ pathLength: 0, strokeDashoffset: 0, opacity: 0 }} 
+                            animate={{ pathLength: 1, strokeDashoffset: -20, opacity: 1 }} 
+                            transition={{ pathLength: { duration: 0.8, delay: i * 0.1 + 0.2 }, strokeDashoffset: { duration: 1, repeat: Infinity, ease: "linear" } }}
+                            d={edge.path} fill="transparent" stroke="#4C9FE8" strokeWidth="1" strokeDasharray="4 4" 
+                          />
+                        ) : (
+                          <text x="50%" y="50%" fill="#F6F4EF80" fontSize="8" fontFamily="monospace">
+                             <textPath href={`#edge-${i}`} startOffset="50%" textAnchor="middle">{edge.label}</textPath>
+                          </text>
+                        )}
                         <path id={`edge-${i}`} d={edge.path} fill="none" />
                       </React.Fragment>
                     ))}
@@ -337,7 +407,6 @@ export default function Home() {
                   </span>
                   <span className={
                     trace.type === "system" ? "text-[#F5A623]" :
-                    trace.type === "success" ? "text-[#2FAE86] font-bold whitespace-pre-wrap" :
                     trace.type === "info" ? "text-white/80" : "text-[#4C9FE8]"
                   }>
                     {trace.message}
@@ -379,10 +448,10 @@ export default function Home() {
                 Reject Action
               </button>
               <button 
-                onClick={() => submitApproval(pendingApproval.task_id, 'reject').then(() => setPendingApproval(null))}
+                onClick={() => submitApproval(pendingApproval.task_id, 'revise').then(() => setPendingApproval(null))}
                 className="px-4 py-2 rounded font-mono text-xs border border-white/10 text-white/80 hover:bg-white/5 transition-colors"
               >
-                Revise
+                Ask to Revise
               </button>
               <button 
                 onClick={() => submitApproval(pendingApproval.task_id, 'approve').then(() => setPendingApproval(null))}

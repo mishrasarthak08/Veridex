@@ -25,8 +25,6 @@ def search_web(query: str) -> str:
 import uuid
 from app.agents.approval.layer import global_approval_layer
 from app.agents.communication.bus import AgentBus
-from app.agents.planner.engine import TaskNode
-from app.agents.scheduler.queue import TaskScheduler
 
 @tool
 async def execute_production_query(query: str) -> str:
@@ -58,6 +56,9 @@ async def delegate_task(goal: str, target_agent: str) -> str:
     """
     Delegates a sub-goal or task to another specialized agent.
     """
+    from app.agents.planner.engine import TaskNode
+    from app.agents.scheduler.queue import TaskScheduler
+
     scheduler = TaskScheduler()
     task = TaskNode(description=goal, agent_role=target_agent)
     await scheduler.enqueue(task)

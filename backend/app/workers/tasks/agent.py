@@ -3,6 +3,8 @@ from typing import Dict, Any
 import asyncio
 from app.agents.execution.engine import AgentExecutor
 from app.agents.communication.bus import AgentBus
+import app.agents.skills.basics  # Ensure basic tools are registered
+import app.agents.skills.knowledge_tools  # Ensure knowledge tools are registered
 
 @celery_app.task(name="app.workers.tasks.agent.execute_task", bind=True, max_retries=3)
 def execute_task(self, task_definition: Dict[str, Any]) -> Dict[str, Any]:

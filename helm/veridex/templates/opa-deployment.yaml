@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-opa
+spec:
+  replicas: {{ .Values.opa.replicaCount }}
+  selector:
+    matchLabels:
+      app: veridex-opa
+  template:
+    metadata:
+      labels:
+        app: veridex-opa
+    spec:
+      containers:
+        - name: opa
+          image: "{{ .Values.opa.image.repository }}:{{ .Values.opa.image.tag }}"
+          imagePullPolicy: {{ .Values.opa.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8181
+          args:
+            - "run"
+            - "--server"
+            - "--addr=0.0.0.0:8181"
+            - "/policies"
+          volumeMounts:
+            - name: opa-policies
+              mountPath: /policies
+      volumes:
+        - name: opa-policies
+          configMap:
+            name: {{ .Release.Name }}-opa-policies
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-opa
+spec:
+  type: {{ .Values.opa.service.type }}
+  ports:
+    - port: {{ .Values.opa.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: veridex-opa

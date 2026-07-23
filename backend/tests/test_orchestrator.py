@@ -16,11 +16,31 @@ async def test_orchestrator_full_cycle():
     
     with patch("app.workers.tasks.agent.execute_task.apply_async") as mock_apply:
         
-        with patch("app.ai.router.router.generate") as mock_llm:
-            # Provide a canned LLM response
-            mock_llm.return_value = {
-                "choices": [{"message": {"content": "MOCKED_SUCCESS"}}]
-            }
+        with patch("app.agents.planner.engine.acompletion") as mock_planner_llm, \
+             patch("app.agents.execution.engine.acompletion") as mock_exec_llm:
+            
+            # Mock the planner returning exactly one subtask
+            class MockPlannerMessage:
+                content = '{"tasks": [{"id": "test_subtask", "description": "A mocked subtask", "agent_role": "Tester", "dependencies": []}]}'
+            class MockPlannerChoice:
+                message = MockPlannerMessage()
+            class MockPlannerResponse:
+                choices = [MockPlannerChoice()]
+                
+            mock_planner_llm.return_value = MockPlannerResponse()
+            
+            # Mock the executor returning a success message
+            class MockExecMessage:
+                content = "MOCKED_SUCCESS"
+                tool_calls = None
+                def model_dump(self):
+                    return {"role": "assistant", "content": self.content}
+            class MockExecChoice:
+                message = MockExecMessage()
+            class MockExecResponse:
+                choices = [MockExecChoice()]
+                
+            mock_exec_llm.return_value = MockExecResponse()
             
             # 1. Trigger the planner in a thread since it uses asyncio.run() internally
             loop = asyncio.get_running_loop()

@@ -1,26 +1,17 @@
 import type { Metadata } from "next";
-import { Poppins, Inter, Geist_Mono } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+import { AuthProvider } from "../context/AuthContext";
+import { Sidebar } from "../components/layout/Sidebar";
 
-const inter = Inter({
-  variable: "--font-liberation-sans", // using Inter as fallback for Liberation Sans
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-dejavu-mono", // using Geist Mono as fallback for DejaVu Sans Mono
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
-  title: "Veridex Orchestration Console",
-  description: "A visual direction for Veridex's operator console",
+  title: "Veridex - AI Platform",
+  description: "Enterprise-grade orchestration for multi-agent LLM systems.",
 };
 
 export default function RootLayout({
@@ -29,11 +20,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${poppins.variable} ${inter.variable} ${geistMono.variable} h-full`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} dark h-full`}>
+      <body className="min-h-full h-screen overflow-hidden flex bg-[#0B0E12] text-[#F6F4EF] antialiased">
+        <AuthProvider>
+          <Sidebar />
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

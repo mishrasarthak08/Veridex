@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-opa-policies
+data:
+  authz.rego: |
+    package veridex.authz
+    
+    default allow = false
+    
+    allow {
+        input.action == "get"
+        input.user.roles[_] == "system_admin"
+    }

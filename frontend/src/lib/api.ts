@@ -36,18 +36,51 @@ export async function fetchGraph() {
   return response.json();
 }
 
-export async function submitApproval(taskId: string, decision: 'approve' | 'reject' | 'revise') {
-  const response = await fetch(`${API_BASE_URL}/agents/approve`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ task_id: taskId, decision }),
+export async function submitApproval(taskId: string, action: "approve" | "reject", feedback?: string) {
+  const res = await fetch(`http://localhost:8000/api/v1/tasks/${taskId}/approval`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, feedback })
   });
+  if (!res.ok) throw new Error("Approval failed");
+  return res.json();
+}
 
-  if (!response.ok) {
-    throw new Error(`Failed to submit approval: ${response.statusText}`);
-  }
+const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  return response.json();
+const headersWithAuth = () => {
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+};
+
+export async function getCurrentUser() {
+  const res = await fetch(`http://localhost:8000/api/v1/auth/me`, {
+    method: "GET",
+    headers: headersWithAuth()
+  });
+  if (!res.ok) throw new Error("Failed to fetch user");
+  const data = await res.json();
+  return data.data; // Note: SuccessResponse wraps in data
+}
+
+export async function fetchTelemetry() {
+  const res = await fetch(`http://localhost:8000/api/v1/telemetry/`, {
+    method: "GET",
+    headers: headersWithAuth()
+  });
+  if (!res.ok) throw new Error("Failed to fetch telemetry");
+  return res.json();
+}
+
+export async function triggerSync(connectorType: string, config: any) {
+  const res = await fetch(`http://localhost:8000/api/v1/knowledge/sync`, {
+    method: "POST",
+    headers: headersWithAuth(),
+    body: JSON.stringify({ connector_type: connectorType, config })
+  });
+  if (!res.ok) throw new Error("Failed to trigger sync");
+  return res.json();
 }

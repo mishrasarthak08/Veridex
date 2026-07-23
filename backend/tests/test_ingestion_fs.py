@@ -62,6 +62,17 @@ async def test_filesystem_ingestion_pipeline():
         
     embedder.embed_documents = mock_embed_documents
 
+    import uuid
+    project_id = f"test_project_{uuid.uuid4()}"
+    
+    # Mock normalize to inject our unique project_id
+    original_normalize = connector.normalize
+    async def mock_normalize(raw_doc):
+        doc = await original_normalize(raw_doc)
+        doc["project_id"] = project_id
+        return doc
+    connector.normalize = mock_normalize
+
     # 2. Setup the pipeline
     pipeline = IngestionPipeline(
         connector=connector,
@@ -79,8 +90,8 @@ async def test_filesystem_ingestion_pipeline():
 
     # 4. Verify outcomes
     # Verify Neo4j
-    docs = await graph_store.get_documents_in_project("unassigned_project")
-    assert len(docs) > 0, "No documents found in Neo4j for the unassigned project"
+    docs = await graph_store.get_documents_in_project(project_id)
+    assert len(docs) > 0, f"No documents found in Neo4j for {project_id}"
     
     # Check that chunks were attached in the graph
     doc_id = docs[0]["document_id"]
@@ -89,10 +100,20 @@ async def test_filesystem_ingestion_pipeline():
     assert result[0]["chunk_count"] > 0, "No chunks attached to the document in Neo4j"
 
     # Verify Qdrant
-    # Let's search with a dummy vector
+    # Let's search with a dummy vector and filter by our specific document_id
     search_results = await vector_store.search(query_vector=[0.1] * 1536, limit=1)
-    assert len(search_results) > 0, "No vectors found in Qdrant"
-    assert search_results[0]["payload"]["metadata"]["document_id"] == doc_id, "Qdrant payload doesn't match document ID"
+    
+    # Actually, the search might return an old document since they all have the same dummy vector.
+    # We should just verify it exists by checking if any result matches, or filtering.
+    # Since QdrantVectorStore doesn't expose a filter param in the mock test easily, we'll just 
+    # check that it successfully inserted without asserting the exact document_id match if there are multiple.
+    found = any(res["payload"]["metadata"]["document_id"] == doc_id for res in search_results)
+    if not found:
+        # fetch more just in case
+        search_results = await vector_store.search(query_vector=[0.1] * 1536, limit=100)
+        found = any(res["payload"]["metadata"]["document_id"] == doc_id for res in search_results)
+    
+    assert found, "Qdrant payload doesn't match document ID"
 
     # Cleanup Neo4j state for testing
     await graph_repo.execute_write("MATCH (d:Document {id: $doc_id}) DETACH DELETE d", {"doc_id": doc_id})

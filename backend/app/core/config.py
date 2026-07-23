@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
     
+    # Connector Tokens
+    GITHUB_TOKEN: str | None = None
+    SLACK_BOT_TOKEN: str | None = None
+    
     @property
     def DATABASE_URI(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

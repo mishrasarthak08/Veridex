@@ -14,6 +14,46 @@ from app.schemas.common import success_response, error_response
 
 router = APIRouter()
 
+from app.schemas.user import UserCreate
+
+@router.post("/register")
+async def register_user(
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Register a new user.
+    """
+    # Check if user exists
+    result = await db.execute(select(User).where(User.email == user_in.email))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="The user with this email already exists in the system.",
+        )
+        
+    user = User(
+        email=user_in.email,
+        hashed_password=security.get_password_hash(user_in.password),
+        first_name=user_in.first_name,
+        last_name=user_in.last_name,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = security.create_access_token(
+        user.id, expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+    }
+
 @router.post("/login")
 async def login_access_token(
     db: AsyncSession = Depends(get_db),
@@ -169,10 +209,7 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)):
             user_id, expires_delta=access_token_expires
         )
         
-        return {
-            "access_token": jwt_token,
-            "token_type": "bearer"
-        }
+        return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
 @router.get("/google/login")
 async def google_login():
     """
@@ -285,10 +322,7 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
             user_id, expires_delta=access_token_expires
         )
         
-        return {
-            "access_token": jwt_token,
-            "token_type": "bearer"
-        }
+        return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
 
 @router.post("/refresh")
 async def refresh_access_token(current_user: User = Depends(get_current_user)) -> Any:

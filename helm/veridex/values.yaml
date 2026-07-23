@@ -1,13 +1,59 @@
-replicaCount: 3
+# Veridex Helm Chart Values
 
-image:
-  repository: veridex/backend
-  pullPolicy: IfNotPresent
-  tag: "latest"
+global:
+  environment: production
+  deployDatabases: true
 
-service:
-  type: ClusterIP
-  port: 8000
+backend:
+  replicaCount: 3
+  image:
+    repository: veridex/backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+worker:
+  replicaCount: 3
+  image:
+    repository: veridex/worker
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: veridex/frontend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 3000
+
+opa:
+  replicaCount: 1
+  image:
+    repository: openpolicyagent/opa
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 8181
 
 autoscaling:
   enabled: true
@@ -16,10 +62,9 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-resources:
-  requests:
-    cpu: 500m
-    memory: 512Mi
-  limits:
-    cpu: 1000m
-    memory: 1Gi
+config:
+  postgresUser: veridex
+  postgresDb: veridex_db
+  postgresPort: 5432
+  redisPort: 6379
+  minioUser: minioadmin
