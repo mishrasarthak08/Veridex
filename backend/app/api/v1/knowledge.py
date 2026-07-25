@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -13,6 +13,7 @@ from app.knowledge.graph.service import GraphService
 from app.knowledge.graph.repository import GraphRepository
 from app.knowledge.ingestion.pipeline import IngestionPipeline
 from app.knowledge.retrieval.hybrid import HybridRetriever
+from app.core.rate_limit import limiter
 
 router = APIRouter()
 
@@ -36,7 +37,8 @@ class RetrieveRequest(BaseModel):
     limit: int = 5
 
 @router.post("/sync")
-async def trigger_sync(request: SyncRequest):
+@limiter.limit("2/minute")
+async def trigger_sync(req: Request, request: SyncRequest):
     # Dispatch to Celery using apply_async
     task = sync_connector_job.apply_async(
         args=[request.connector_type, request.config]

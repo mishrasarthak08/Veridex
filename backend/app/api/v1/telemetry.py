@@ -12,6 +12,7 @@ router = APIRouter()
 async def get_telemetry_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
     limit: int = Query(50, le=100)
 ) -> Any:
     """
@@ -21,7 +22,7 @@ async def get_telemetry_logs(
     if "system_admin" not in current_user.roles:
          raise HTTPException(status_code=403, detail="Not enough permissions")
          
-    stmt = select(AILog).order_by(AILog.created_at.desc()).limit(limit)
+    stmt = select(AILog).order_by(AILog.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     logs = result.scalars().all()
     

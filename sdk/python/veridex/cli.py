@@ -106,5 +106,48 @@ def list_traces():
     except Exception as e:
         click.secho(f"Error: {e}", fg="red")
 
+@cli.group()
+def evaluations():
+    """Run and view Evaluations"""
+    pass
+
+@evaluations.command("list")
+def list_evals():
+    """List evaluations."""
+    client = get_client()
+    try:
+        evals = client.evaluations.list_evaluations()
+        for ev in evals:
+            click.echo(f"ID: {ev.get('id')} | Status: {ev.get('status')} | Score: {ev.get('score')}")
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red")
+
+@evaluations.command("run")
+def run_evals():
+    """Trigger an evaluation run."""
+    client = get_client()
+    try:
+        result = client.evaluations.run_evaluations()
+        click.secho(f"Evaluation triggered successfully: {result}", fg="green")
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red")
+
+@cli.group()
+def projects():
+    """Manage Projects & Workspaces"""
+    pass
+
+@projects.command("list")
+def list_projects():
+    """List available projects."""
+    client = get_client()
+    try:
+        res = client.projects.list_projects()
+        data = res.get("data", [])
+        for p in data:
+            click.echo(f"ID: {p.get('id')} | Name: {p.get('name')} | Role: {p.get('role')}")
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red")
+
 if __name__ == "__main__":
     cli()

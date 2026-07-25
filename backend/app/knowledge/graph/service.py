@@ -104,8 +104,10 @@ class GraphService:
         """
         if parent_type == "database_id":
             parent_label = "Database"
-        else:
+        elif parent_type == "workspace_id":
             parent_label = "Workspace"
+        else:
+            raise ValueError(f"Invalid parent_type for Notion ingestion: {parent_type}")
             
         query = f"""
         MERGE (p:{parent_label} {{id: $parent_id}})

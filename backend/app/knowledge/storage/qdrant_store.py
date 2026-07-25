@@ -4,8 +4,9 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 
 class QdrantStore:
-    def __init__(self, host: str = "qdrant", port: int = 6333, collection_name: str = "knowledge_base"):
-        self.client = AsyncQdrantClient(host=host, port=port)
+    def __init__(self, collection_name: str = "knowledge_base"):
+        from app.core.config import settings
+        self.client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY)
         self.collection_name = collection_name
         self.vector_size = 768 # Default for gemini text-embedding-004
 
@@ -21,6 +22,9 @@ class QdrantStore:
         await self.initialize_collection()
         points = []
         for text, embedding, meta in zip(texts, embeddings, metadata):
+            if len(embedding) != self.vector_size:
+                raise ValueError(f"Vector dimension mismatch. Expected {self.vector_size}, got {len(embedding)}")
+                
             # Enforce schema: Add text into payload
             payload = {"text": text, **meta}
             # Use provided ID or generate a new one

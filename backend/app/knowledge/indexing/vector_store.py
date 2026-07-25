@@ -8,11 +8,9 @@ import uuid
 import httpx
 
 class QdrantVectorStore:
-    def __init__(self, host: str = None, port: int = 6333, collection_name: str = "veridex_knowledge"):
-        import os
-        host = host or os.getenv("QDRANT_HOST", "localhost")
-        # We use AsyncQdrantClient for non-blocking IO
-        self.client = AsyncQdrantClient(host=host, port=port)
+    def __init__(self, collection_name: str = "veridex_knowledge"):
+        from app.core.config import settings
+        self.client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY)
         self.collection_name = collection_name
         self.vector_size = 1536 # For text-embedding-3-small
         

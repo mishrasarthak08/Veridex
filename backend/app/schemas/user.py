@@ -6,3 +6,5 @@ class UserCreate(BaseModel):
     password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    tos_accepted: bool
+    privacy_accepted: bool

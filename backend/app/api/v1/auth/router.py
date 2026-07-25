@@ -1,6 +1,6 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,13 +11,16 @@ from app.core import security
 from app.core.config import settings
 from app.api.deps import get_current_user
 from app.schemas.common import success_response, error_response
+from app.core.rate_limit import limiter
 
 router = APIRouter()
 
 from app.schemas.user import UserCreate
 
 @router.post("/register")
+@limiter.limit("5/minute")
 async def register_user(
+    request: Request,
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -33,12 +36,13 @@ async def register_user(
             status_code=400,
             detail="The user with this email already exists in the system.",
         )
-        
     user = User(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
         first_name=user_in.first_name,
         last_name=user_in.last_name,
+        tos_accepted=user_in.tos_accepted,
+        privacy_accepted=user_in.privacy_accepted,
     )
     db.add(user)
     await db.commit()
@@ -54,8 +58,13 @@ async def register_user(
         "token_type": "bearer",
     }
 
+from fastapi.responses import JSONResponse
+from app.db.models.audit import LoginAuditLog
+
 @router.post("/login")
+@limiter.limit("5/minute")
 async def login_access_token(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
@@ -65,20 +74,86 @@ async def login_access_token(
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
     
+    # Audit logging
+    client_host = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
     if not user or not security.verify_password(form_data.password, user.hashed_password):
+        audit_log = LoginAuditLog(
+            user_id=str(user.id) if user else None,
+            email_attempted=form_data.username,
+            ip_address=client_host,
+            user_agent=user_agent,
+            success=False,
+            failure_reason="Incorrect email or password"
+        )
+        db.add(audit_log)
+        await db.commit()
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     elif not user.is_active:
+        audit_log = LoginAuditLog(
+            user_id=str(user.id),
+            email_attempted=form_data.username,
+            ip_address=client_host,
+            user_agent=user_agent,
+            success=False,
+            failure_reason="Inactive user"
+        )
+        db.add(audit_log)
+        await db.commit()
         raise HTTPException(status_code=400, detail="Inactive user")
         
+    # MFA Check
+    if user.mfa_enabled:
+        # User has MFA enabled, return a partial token to hit /login/mfa
+        audit_log = LoginAuditLog(
+            user_id=str(user.id),
+            email_attempted=form_data.username,
+            ip_address=client_host,
+            user_agent=user_agent,
+            success=True,
+            failure_reason="MFA required"
+        )
+        db.add(audit_log)
+        await db.commit()
+        
+        mfa_token = security.create_access_token(
+            subject=user.id, expires_delta=timedelta(minutes=5)
+        )
+        return {"requires_mfa": True, "mfa_token": mfa_token}
+    
+    # Full login
+    audit_log = LoginAuditLog(
+        user_id=str(user.id),
+        email_attempted=form_data.username,
+        ip_address=client_host,
+        user_agent=user_agent,
+        success=True
+    )
+    db.add(audit_log)
+    await db.commit()
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = security.create_access_token(
         user.id, expires_delta=access_token_expires
     )
     
-    return {
+    refresh_token = security.create_refresh_token(user.id)
+    
+    response = JSONResponse(content={
         "access_token": token,
-        "token_type": "bearer",  # nosec B105
-    }
+        "token_type": "bearer",
+    })
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        samesite="strict",
+        secure=False, # Set to True in production with HTTPS
+    )
+    return response
 
 @router.get("/me")
 async def read_users_me(current_user: User = Depends(get_current_user)) -> Any:
@@ -325,13 +400,31 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
         return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
 
 @router.post("/refresh")
-async def refresh_access_token(current_user: User = Depends(get_current_user)) -> Any:
+async def refresh_access_token(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
     """
-    Refresh access token for current user.
+    Refresh access token for current user using HttpOnly cookie.
     """
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token missing")
+        
+    payload = security.verify_token(refresh_token, "refresh")
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+    user_id = payload.get("sub")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+        
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = security.create_access_token(
-        current_user.id, expires_delta=access_token_expires
+        user.id, expires_delta=access_token_expires
     )
     
     return {
@@ -339,9 +432,72 @@ async def refresh_access_token(current_user: User = Depends(get_current_user)) -
         "token_type": "bearer",
     }
 
+import pyotp
+
+@router.post("/mfa/setup")
+async def mfa_setup(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Any:
+    """
+    Generate MFA secret and URI for setup.
+    """
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA already enabled")
+        
+    secret = pyotp.random_base32()
+    current_user.mfa_secret = secret
+    await db.commit()
+    
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(name=current_user.email, issuer_name="Veridex")
+    
+    return {"secret": secret, "uri": uri}
+
+from pydantic import BaseModel
+class MFAVerifyRequest(BaseModel):
+    code: str
+
+@router.post("/mfa/verify")
+async def mfa_verify(request: MFAVerifyRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> Any:
+    """
+    Verify MFA code and enable MFA or issue full tokens if already enabled.
+    """
+    if not current_user.mfa_secret:
+        raise HTTPException(status_code=400, detail="MFA not setup")
+        
+    totp = pyotp.TOTP(current_user.mfa_secret)
+    if not totp.verify(request.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+        
+    if not current_user.mfa_enabled:
+        current_user.mfa_enabled = True
+        await db.commit()
+        
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = security.create_access_token(
+        current_user.id, expires_delta=access_token_expires
+    )
+    
+    refresh_token = security.create_refresh_token(current_user.id)
+    
+    response = JSONResponse(content={
+        "access_token": token,
+        "token_type": "bearer",
+    })
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        samesite="strict",
+        secure=False, # Set to True in production with HTTPS
+    )
+    return response
+
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)) -> Any:
+async def logout(response: JSONResponse) -> Any:
     """
-    Logout current user (stateless, so just returns success for client to drop token).
+    Logout current user.
     """
-    return success_response(message="Successfully logged out")
+    resp = JSONResponse(content={"message": "Successfully logged out"})
+    resp.delete_cookie("refresh_token")
+    return resp

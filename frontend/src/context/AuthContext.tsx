@@ -32,9 +32,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
+    const isTokenExpired = (token: string) => {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.exp * 1000 < Date.now();
+      } catch (e) {
+        return true;
+      }
+    };
+
     const initAuth = async () => {
       const token = localStorage.getItem("token");
-      if (token) {
+      if (token && !isTokenExpired(token)) {
         try {
           const userData = await getCurrentUser();
           setUser(userData);
@@ -42,7 +51,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.error("Failed to fetch user", err);
           localStorage.removeItem("token");
         }
+      } else if (token) {
+        // Token is expired
+        console.warn("Token expired, clearing session");
+        localStorage.removeItem("token");
       }
+      
       setLoading(false);
     };
 

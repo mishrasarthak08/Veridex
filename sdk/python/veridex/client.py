@@ -1,6 +1,8 @@
 from .agents import AgentClient
 from .knowledge import KnowledgeClient
 from .telemetry import TelemetryClient
+from .evaluations import EvaluationsClient
+from .projects import ProjectsClient
 
 class Client:
     """
@@ -12,3 +14,5 @@ class Client:
         self.agents = AgentClient(self)
         self.knowledge = KnowledgeClient(self)
         self.telemetry = TelemetryClient(self)
+        self.evaluations = EvaluationsClient(self)
+        self.projects = ProjectsClient(self)

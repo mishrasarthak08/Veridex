@@ -14,6 +14,14 @@ class User(Base, UUIDMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     
+    # MFA
+    mfa_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Compliance
+    tos_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    privacy_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
 
     roles: Mapped[List["Role"]] = relationship(

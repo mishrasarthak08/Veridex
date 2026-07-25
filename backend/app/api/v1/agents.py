@@ -1,10 +1,11 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 from typing import Dict, Any, List
 from app.agents.orchestrator.manager import Orchestrator
 from app.agents.approval.layer import global_approval_layer
 from sse_starlette.sse import EventSourceResponse
 from app.agents.communication.bus import AgentBus
+from app.core.rate_limit import limiter
 import json
 router = APIRouter()
 
@@ -21,7 +22,8 @@ class ApprovalDecision(BaseModel):
     decision: str  # 'approve', 'reject', 'revise'
 
 @router.post("/goal")
-async def submit_goal(request: GoalRequest, background_tasks: BackgroundTasks):
+@limiter.limit("5/minute")
+async def submit_goal(req: Request, request: GoalRequest, background_tasks: BackgroundTasks):
     """
     Submits a complex goal to the Orchestrator, which breaks it into a DAG
     and schedules it across multiple specialized agents.

@@ -16,14 +16,21 @@ import { motion } from "framer-motion";
 const navItems = [
   { name: "Orchestrator", href: "/", icon: LayoutDashboard },
   { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Projects", href: "/projects", icon: Network },
   { name: "Knowledge Graph", href: "/knowledge-graph", icon: Network },
   { name: "Connectors", href: "/connectors", icon: Plug },
   { name: "Policies", href: "/policies", icon: ShieldCheck },
   { name: "Telemetry", href: "/telemetry", icon: Activity },
+  { name: "Evaluations", href: "/evaluations", icon: Activity },
+  { name: "Resilience", href: "/resilience", icon: ShieldCheck },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  if (pathname === "/login" || pathname === "/register") {
+    return null;
+  }
 
   return (
     <aside className="w-64 h-full border-r border-white/5 bg-[#0B0E12]/95 backdrop-blur-md flex flex-col shrink-0">
@@ -61,7 +68,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 mt-auto border-t border-white/5">
+      <div className="p-4 mt-auto border-t border-white/5 space-y-4">
+        <a 
+          href="http://localhost:8000/docs" 
+          target="_blank" 
+          rel="noreferrer"
+          className="flex items-center gap-3 px-3 py-2 rounded-md font-mono text-xs text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors"
+        >
+          <Activity size={16} />
+          <span>API Docs</span>
+        </a>
         <div className="flex items-center gap-3 px-3 py-2 rounded-md border border-white/5 bg-white/5">
           <div className="w-6 h-6 rounded-full bg-[#E54D2E]/20 text-[#E54D2E] flex items-center justify-center font-bold text-[10px]">
             SA

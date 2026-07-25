@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { Activity, ServerCrash, RefreshCw } from "lucide-react";
 import { fetchTelemetry } from "../../lib/api";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { LoadingState } from "../../components/ui/LoadingState";
 
 export default function TelemetryPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -76,19 +79,14 @@ export default function TelemetryPage() {
           
           <div className="flex-1 overflow-auto p-0">
             {isLoading ? (
-              <div className="h-full flex items-center justify-center text-white/20 font-mono text-sm">
-                Fetching logs...
-              </div>
+              <LoadingState message="Fetching telemetry logs..." />
             ) : error ? (
-              <div className="h-full flex flex-col items-center justify-center text-[#E54D2E]/80 font-mono text-sm gap-3">
-                <ServerCrash size={24} />
-                {error}
-                <span className="text-[10px] text-white/40">(Hint: Check auth token or backend status)</span>
-              </div>
+              <ErrorState message={error} onRetry={loadData} />
             ) : logs.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-white/20 font-mono text-sm">
-                No telemetry logs found.
-              </div>
+              <EmptyState 
+                title="No Telemetry Found" 
+                description="No telemetry logs have been recorded yet." 
+              />
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>

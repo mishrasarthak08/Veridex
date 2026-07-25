@@ -40,44 +40,79 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 from fastapi.responses import JSONResponse
-from app.governance.engine import PolicyEngine
+import jwt
+from app.core.config import settings
+from app.db.session import AsyncSessionLocal
+from app.services.policy_service import PolicyService
+from app.governance.audit import ImmutableAuditLog
 
 class OPAMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
-        self.policy_engine = PolicyEngine()
+        self.policy_service = PolicyService()
+        self.audit_log = ImmutableAuditLog()
         
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        
         # We only protect API routes
-        if not request.url.path.startswith("/api/"):
+        if not path.startswith("/api/"):
             return await call_next(request)
             
-        # In a real app, user_context would be populated by an Authentication middleware (e.g. JWT validation)
-        # For this phase, we mock the user context if not present in request.state
-        if not hasattr(request.state, "user"):
-            # Mock admin user for demonstration purposes, normally this blocks if no user
-            request.state.user = {
-                "id": "u_dev",
-                "roles": ["system_admin"],
-                "organization_id": "org_default"
-            }
+        # Bypass public auth routes
+        if path.startswith("/api/v1/auth/"):
+            return await call_next(request)
             
-        user_context = request.state.user
-        action = request.method.lower()
-        
-        # We can pass path params or query params as resource context
-        # Or parse the URL to determine resource type
-        resource_context = {
-            "type": "api_endpoint",
-            "path": request.url.path,
-            # For strict tenancy, we assume the resource org matches the user org unless specified
-            "organization_id": user_context.get("organization_id")
-        }
-        
-        allowed = await self.policy_engine.evaluate(user_context, action, resource_context)
-        
-        if not allowed:
-            logger.warning(f"OPA Denied access for {user_context.get('id')} on {action} {request.url.path}")
-            return JSONResponse(status_code=403, content={"detail": "Forbidden by OPA Policy"})
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid authorization header"})
             
+        token = auth_header.split(" ")[1]
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id = payload.get("sub")
+            if not user_id:
+                return JSONResponse(status_code=401, content={"detail": "Invalid token payload"})
+        except Exception as e:
+            return JSONResponse(status_code=401, content={"detail": "Could not validate credentials"})
+            
+        # Map path to resource (e.g. /api/v1/projects -> project)
+        parts = path.split("/")
+        resource = "unknown"
+        if len(parts) >= 4:
+            resource = parts[3] # e.g. projects, evaluations
+            # Basic singularization for typical REST resources
+            if resource.endswith("s"):
+                resource = resource[:-1]
+                
+        # Map method to action
+        method = request.method.upper()
+        if method == "GET":
+            action = "read"
+        elif method == "DELETE":
+            action = "delete"
+        else:
+            action = "write"
+            
+        async with AsyncSessionLocal() as db:
+            decision = await self.policy_service.evaluate(db, user_id, resource, action)
+            
+            # Log the governance decision
+            await self.audit_log.log_action(
+                tenant_id="default_tenant",
+                actor=str(user_id),
+                action=action,
+                resource=resource,
+                details={"path": path, "method": method, "policy_reason": decision.reason},
+                decision="ALLOW" if decision.allow else "DENY",
+                policy_id=decision.policy_id
+            )
+            
+            if not decision.allow:
+                logger.warning(f"Policy Engine Denied access for {user_id} on {action} {resource} (Path: {path})")
+                return JSONResponse(status_code=403, content={"detail": f"Forbidden by policy: {decision.reason}"})
+                
+        # Inject user_id into state for downstream routes
+        request.state.user_id = user_id
+        
         return await call_next(request)

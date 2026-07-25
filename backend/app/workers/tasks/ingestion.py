@@ -77,7 +77,7 @@ def process_ingestion_job(self, document_id: str, doc_type: str, raw_text: str, 
 
     except Exception as exc:
         print(f"Error processing ingestion job: {exc}")
-        self.retry(exc=exc)
+        self.retry(exc=exc, countdown=2 ** self.request.retries)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
@@ -153,4 +153,4 @@ def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
 
     except Exception as exc:
         print(f"Error processing sync_connector_job: {exc}")
-        self.retry(exc=exc)
+        self.retry(exc=exc, countdown=2 ** self.request.retries)

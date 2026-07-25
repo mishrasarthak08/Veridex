@@ -7,6 +7,10 @@ from .project import Project
 from .role import Role, role_permissions
 from .permission import Permission
 from .telemetry import AILog
+from .chat import ChatHistory
+from .connector import ConnectorConfig
+from .evaluation import EvaluationRun
+from .audit import LoginAuditLog
 
 # Expose all models so Alembic can discover them
 __all__ = [
@@ -18,5 +22,9 @@ __all__ = [
     "Role",
     "role_permissions",
     "Permission",
-    "AILog"
+    "AILog",
+    "ChatHistory",
+    "ConnectorConfig",
+    "EvaluationRun",
+    "LoginAuditLog"
 ]
