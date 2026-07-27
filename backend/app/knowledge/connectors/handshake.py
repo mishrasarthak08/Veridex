@@ -88,10 +88,11 @@ class HandshakeConnector(BaseConnector):
         content = f"# {title} at {employer}\n\n{description}"
         
         return {
-            "document_id": f"handshake_job_{job_id}",
-            "source_type": "handshake",
+            "id": f"handshake_job_{job_id}",
+            "title": title,
+            "source": "handshake",
             "content": content,
-            "metadata": {
+            "source_metadata": {
                 "title": title,
                 "employer": employer,
                 "url": url,
