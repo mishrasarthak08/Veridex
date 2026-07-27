@@ -63,6 +63,10 @@ class OPAMiddleware(BaseHTTPMiddleware):
         if path.startswith("/api/v1/auth/"):
             return await call_next(request)
             
+        # Bypass health routes
+        if path.startswith("/api/v1/health/"):
+            return await call_next(request)
+            
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return JSONResponse(status_code=401, content={"detail": "Missing or invalid authorization header"})

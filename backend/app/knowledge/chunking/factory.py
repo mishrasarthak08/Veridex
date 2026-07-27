@@ -3,6 +3,7 @@ from .base import BaseChunker
 from .recursive import RecursiveCharacterChunker
 from .markdown import MarkdownChunker
 from .token import TokenChunker
+from .handshake import HandshakeChunker
 
 class ChunkerFactory:
     @staticmethod
@@ -21,6 +22,8 @@ class ChunkerFactory:
             # recursive with code-specific separators like "\nclass ", "\ndef "
             separators = ["\nclass ", "\ndef ", "\nfunction ", "\n\n", "\n", " ", ""]
             return RecursiveCharacterChunker(separators=separators, **kwargs)
+        elif doc_type == "handshake":
+            return HandshakeChunker(**kwargs)
         else:
             # Default fallback
             return TokenChunker(**kwargs)

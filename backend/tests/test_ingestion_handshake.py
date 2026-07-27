@@ -1,13 +1,11 @@
 import pytest
 import os
-import shutil
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from app.knowledge.connectors.filesystem import FileSystemConnector
+from app.knowledge.connectors.handshake import HandshakeConnector
 from app.knowledge.storage.minio_store import MinioStorage
 from app.knowledge.parsers.base import DocumentParser
-from app.knowledge.chunking.token import TokenChunker
+from app.knowledge.chunking.handshake import HandshakeChunker
 from app.knowledge.embeddings.litellm_embedder import LiteLLMEmbedder
 from app.knowledge.indexing.vector_store import QdrantVectorStore
 from app.knowledge.indexing.sparse_store import BM25SparseStore
@@ -15,37 +13,14 @@ from app.knowledge.graph.repository import GraphRepository
 from app.knowledge.graph.service import GraphService
 from app.knowledge.ingestion.pipeline import IngestionPipeline
 
-# We use the existing Docker infrastructure
-# MinIO: 9000/9001
-# Neo4j: 7687
-# Qdrant: 6333
-
-TEST_DIR = Path("/tmp/veridex_test_fs")
-
-@pytest.fixture(autouse=True)
-def setup_test_files():
-    # Setup
-    if TEST_DIR.exists():
-        shutil.rmtree(TEST_DIR)
-    TEST_DIR.mkdir(parents=True)
-    
-    test_file = TEST_DIR / "test_doc.txt"
-    test_file.write_text("This is a test document. It contains some text that we want to chunk and embed. Veridex is an awesome AI agent orchestration platform.", encoding="utf-8")
-    
-    yield
-    
-    # Teardown
-    if TEST_DIR.exists():
-        shutil.rmtree(TEST_DIR)
-
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.environ.get("CI") != "true", reason="Integration tests require Docker services")
-async def test_filesystem_ingestion_pipeline():
+async def test_handshake_ingestion_pipeline():
     # 1. Initialize dependencies
-    connector = FileSystemConnector(root_dir=str(TEST_DIR))
+    connector = HandshakeConnector(api_token="dummy_token")
     storage = MinioStorage()
-    parser = DocumentParser() # Just passes text through for now
-    chunker = TokenChunker(chunk_size=10, chunk_overlap=2)
+    parser = DocumentParser() 
+    chunker = HandshakeChunker()
     embedder = LiteLLMEmbedder(model_name="text-embedding-3-small")
     vector_store = QdrantVectorStore(collection_name="test_veridex_knowledge")
     sparse_store = BM25SparseStore()
@@ -58,10 +33,26 @@ async def test_filesystem_ingestion_pipeline():
 
     # Mock the litellm embedder so we don't need a real API key during tests
     async def mock_embed_documents(texts):
-        # Return a dummy vector of 1536 dimensions for each text
         return [[0.1] * 1536 for _ in texts]
         
     embedder.embed_documents = mock_embed_documents
+
+    # Mock connector auth and sync
+    async def mock_authenticate():
+        return True
+    connector.authenticate = mock_authenticate
+
+    async def mock_sync():
+        yield {
+            "id": 1234,
+            "title": "Software Engineer",
+            "employer": {"name": "Tech Corp"},
+            "description": "Must know Python.\n\nGreat benefits.",
+            "url": "https://handshake/jobs/1234",
+            "created_at": "2023-01-01T00:00:00Z",
+            "updated_at": "2023-01-01T00:00:00Z"
+        }
+    connector.sync = mock_sync
 
     import uuid
     project_id = f"test_project_{uuid.uuid4()}"
@@ -101,18 +92,8 @@ async def test_filesystem_ingestion_pipeline():
     assert result[0]["chunk_count"] > 0, "No chunks attached to the document in Neo4j"
 
     # Verify Qdrant
-    # Let's search with a dummy vector and filter by our specific document_id
-    search_results = await vector_store.search(query_vector=[0.1] * 1536, limit=1)
-    
-    # Actually, the search might return an old document since they all have the same dummy vector.
-    # We should just verify it exists by checking if any result matches, or filtering.
-    # Since QdrantVectorStore doesn't expose a filter param in the mock test easily, we'll just 
-    # check that it successfully inserted without asserting the exact document_id match if there are multiple.
+    search_results = await vector_store.search(query_vector=[0.1] * 1536, limit=100)
     found = any(res["payload"]["metadata"]["document_id"] == doc_id for res in search_results)
-    if not found:
-        # fetch more just in case
-        search_results = await vector_store.search(query_vector=[0.1] * 1536, limit=100)
-        found = any(res["payload"]["metadata"]["document_id"] == doc_id for res in search_results)
     
     assert found, "Qdrant payload doesn't match document ID"
 

@@ -13,6 +13,7 @@ type User = {
 
 type AuthContextType = {
   user: User | null;
+  token: string | null;
   loading: boolean;
   login: (token: string) => void;
   logout: () => void;
@@ -20,6 +21,7 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  token: null,
   loading: true,
   login: () => {},
   logout: () => {},
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -42,19 +45,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const initAuth = async () => {
-      const token = localStorage.getItem("token");
-      if (token && !isTokenExpired(token)) {
+      const storedToken = localStorage.getItem("token");
+      if (storedToken && !isTokenExpired(storedToken)) {
         try {
+          setToken(storedToken);
           const userData = await getCurrentUser();
           setUser(userData);
         } catch (err) {
           console.error("Failed to fetch user", err);
           localStorage.removeItem("token");
         }
-      } else if (token) {
+      } else if (storedToken) {
         // Token is expired
         console.warn("Token expired, clearing session");
         localStorage.removeItem("token");
+        setToken(null);
       }
       
       setLoading(false);
@@ -85,12 +90,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    setToken(null);
     setUser(null);
     router.push("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
       {loading ? (
         <div className="flex h-screen w-full items-center justify-center bg-[#0B0E12]">
           <div className="animate-spin h-8 w-8 border-4 border-[#4C9FE8] border-t-transparent rounded-full"></div>

@@ -14,6 +14,7 @@ from app.knowledge.graph.service import GraphService
 from app.knowledge.ingestion.pipeline import IngestionPipeline
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(os.environ.get("CI") != "true", reason="Integration tests require Docker services")
 async def test_github_ingestion_pipeline():
     # 1. Initialize dependencies
     connector = GitHubConnector(access_token="dummy", repository_full_name="test/repo")

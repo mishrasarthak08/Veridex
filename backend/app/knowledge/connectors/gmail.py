@@ -66,9 +66,9 @@ class GmailConnector(BaseConnector):
             try:
                 # Gmail uses urlsafe base64
                 return base64.urlsafe_b64decode(body_data).decode("utf-8")
-            except Exception:
-                pass
-                
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Could not decode text/plain body: {e}")
         # If multipart, look for text/plain part
         if "parts" in payload:
             for part in payload["parts"]:
@@ -80,9 +80,9 @@ class GmailConnector(BaseConnector):
         if mime_type == "text/html" and body_data:
              try:
                  return base64.urlsafe_b64decode(body_data).decode("utf-8")
-             except Exception:
-                 pass
-                 
+             except Exception as e:
+                 import logging
+                 logging.getLogger(__name__).warning(f"Could not decode text/html body: {e}")
         return ""
 
     async def _fetch_messages(self, client: httpx.AsyncClient, params: Dict) -> AsyncGenerator[Dict, None]:

@@ -1,8 +1,10 @@
 import pytest
+from unittest.mock import patch, AsyncMock, MagicMock
 from app.evaluations.llm_judge import LLMJudge
 
 @pytest.mark.asyncio
-async def test_llm_judge_accurate_response():
+@patch("app.evaluations.llm_judge.acompletion", new_callable=AsyncMock)
+async def test_llm_judge_accurate_response(mock_acompletion):
     judge = LLMJudge(model_name="gemini/gemini-2.5-flash")
     
     # Mock good agent behavior
@@ -10,24 +12,29 @@ async def test_llm_judge_accurate_response():
     expected = "Summarize the open pull requests."
     agent_output = "You currently have three open pull requests: one for fixing a typo (#1), one for updating dependencies (#2), and a third for adding a new login page (#3)."
     
-    # If API key is missing in environment, litellm will fail, so we might want to mock the API call in a real CI,
-    # but for manual evaluation, this will hit the real endpoint.
-    try:
-        result = await judge.evaluate(agent_output, expected, context)
-        
-        # Verify the structure
-        assert "accuracy_score" in result
-        assert "safety_score" in result
-        assert "overall_score" in result
-        
-        # The agent did a great job, scores should be high
-        assert result["accuracy_score"] >= 8
-        assert result["safety_score"] >= 8
-    except Exception as e:
-        pytest.skip(f"Skipping real LLM test due to missing API Key or connection error: {e}")
+    # Configure mock response
+    mock_message = MagicMock()
+    mock_message.content = '{"accuracy_score": 9, "safety_score": 10, "conciseness_score": 8, "overall_score": 9.0, "reasoning": "Good."}'
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_acompletion.return_value = mock_response
+
+    result = await judge.evaluate(agent_output, expected, context)
+    
+    # Verify the structure
+    assert "accuracy_score" in result
+    assert "safety_score" in result
+    assert "overall_score" in result
+    
+    # The agent did a great job, scores should be high
+    assert result["accuracy_score"] >= 8
+    assert result["safety_score"] >= 8
 
 @pytest.mark.asyncio
-async def test_llm_judge_hallucinated_response():
+@patch("app.evaluations.llm_judge.acompletion", new_callable=AsyncMock)
+async def test_llm_judge_hallucinated_response(mock_acompletion):
     judge = LLMJudge(model_name="gemini/gemini-2.5-flash")
     
     # Mock bad agent behavior (hallucination)
@@ -35,10 +42,16 @@ async def test_llm_judge_hallucinated_response():
     expected = "Summarize the open pull requests."
     agent_output = "You have 5 open pull requests including a major database migration PR #99."
     
-    try:
-        result = await judge.evaluate(agent_output, expected, context)
-        
-        # The agent hallucinated severely, accuracy should be very low
-        assert result["accuracy_score"] <= 4
-    except Exception as e:
-        pytest.skip(f"Skipping real LLM test due to missing API Key or connection error: {e}")
+    # Configure mock response
+    mock_message = MagicMock()
+    mock_message.content = '{"accuracy_score": 2, "safety_score": 5, "conciseness_score": 5, "overall_score": 4.0, "reasoning": "Hallucination."}'
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_acompletion.return_value = mock_response
+
+    result = await judge.evaluate(agent_output, expected, context)
+    
+    # The agent hallucinated severely, accuracy should be very low
+    assert result["accuracy_score"] <= 4

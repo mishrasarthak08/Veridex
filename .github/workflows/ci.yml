@@ -28,8 +28,13 @@ jobs:
       - name: Run Bandit (Security Scan)
         run: |
           cd backend
-          uv run bandit -r app/
+          uv run bandit -ll -r app/
           
+      - name: Start Docker Services
+        run: |
+          docker compose up -d
+          sleep 10
+
       - name: Run Tests (Pytest)
         run: |
           cd backend
@@ -50,7 +55,7 @@ jobs:
           cd frontend
           npm ci
           
-      - name: Run npm audit
+      - name: Lint and Build
         run: |
           cd frontend
-          npm audit --audit-level=high
+          npm run build

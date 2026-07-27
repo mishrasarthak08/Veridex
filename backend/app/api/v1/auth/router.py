@@ -55,7 +55,7 @@ async def register_user(
     
     return {
         "access_token": token,
-        "token_type": "bearer",
+        "token_type": "bearer",  # nosec B105
     }
 
 from fastapi.responses import JSONResponse

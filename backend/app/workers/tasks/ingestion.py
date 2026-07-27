@@ -98,6 +98,7 @@ def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
     try:
         from app.knowledge.connectors.filesystem import FileSystemConnector
         from app.knowledge.connectors.github import GitHubConnector
+        from app.knowledge.connectors.handshake import HandshakeConnector
         from app.knowledge.storage.minio_store import MinioStorage
         from app.knowledge.parsers.base import DocumentParser
         from app.knowledge.chunking.recursive import RecursiveCharacterChunker
@@ -123,6 +124,10 @@ def sync_connector_job(self, connector_type: str, config: Dict[str, Any]):
             from app.knowledge.connectors.slack import SlackConnector
             connector = SlackConnector(
                 bot_token=config.get("bot_token") or settings.SLACK_BOT_TOKEN
+            )
+        elif connector_type == "handshake":
+            connector = HandshakeConnector(
+                api_token=config.get("api_token") or settings.HANDSHAKE_API_TOKEN
             )
         else:
             raise ValueError(f"Unsupported connector type: {connector_type}")

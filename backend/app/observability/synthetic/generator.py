@@ -1,4 +1,4 @@
-import random
+import secrets
 
 class SyntheticDataGenerator:
     def generate_tasks(self, count: int = 10) -> list:
@@ -16,8 +16,8 @@ class SyntheticDataGenerator:
         
         for _ in range(count):
             tasks.append({
-                "prompt": random.choice(templates),
-                "difficulty": random.choice(["easy", "medium", "hard"])
+                "prompt": secrets.choice(templates),
+                "difficulty": secrets.choice(["easy", "medium", "hard"])
             })
             
         return tasks

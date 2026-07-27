@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     # Connector Tokens
     GITHUB_TOKEN: str | None = None
     SLACK_BOT_TOKEN: str | None = None
+    HANDSHAKE_API_TOKEN: str | None = None
     
     @property
     def DATABASE_URI(self) -> str:

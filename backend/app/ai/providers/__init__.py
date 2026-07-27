@@ -27,8 +27,9 @@ class ProviderFactory:
         try:
             from .ollama import OllamaProvider
             cls._providers["ollama"] = OllamaProvider()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Could not initialize Ollama provider: {e}")
 
     @classmethod
     def get_provider(cls, provider_name: str) -> BaseProvider:
