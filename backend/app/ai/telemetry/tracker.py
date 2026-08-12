@@ -14,6 +14,7 @@ class TelemetryTracker:
         # Subscribe to ModelCalled events
         ai_event_bus.subscribe("ModelCalled", self.on_model_called)
         self.bus = AgentBus()
+        self.events = []
         
     async def start_listening(self):
         """Listen to global Redis bus for DAG traces."""

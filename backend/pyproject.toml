@@ -17,7 +17,14 @@ dependencies = [
     "litellm>=1.52.0",
     "neo4j>=6.2.0",
     "openai>=1.59.3",
+    "opentelemetry-api>=1.26.0",
+    "opentelemetry-sdk>=1.26.0",
+    "opentelemetry-exporter-otlp>=1.26.0",
+    "opentelemetry-instrumentation-fastapi>=0.47b0",
+    "opentelemetry-instrumentation-celery>=0.47b0",
     "passlib[bcrypt]>=1.7.4",
+    "prometheus-client>=0.20.0",
+    "prometheus-fastapi-instrumentator>=7.0.0",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.13.0",
     "pyotp>=2.10.0",
@@ -32,6 +39,8 @@ dependencies = [
     "tenacity>=9.0.0",
     "tiktoken>=0.8.0",
     "uvicorn>=0.50.2",
+    "gptcache>=0.1.44",
+    "structlog>=26.1.0",
 ]
 
 [dependency-groups]

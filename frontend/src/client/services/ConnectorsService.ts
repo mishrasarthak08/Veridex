@@ -64,6 +64,26 @@ export class ConnectorsService {
         });
     }
     /**
+     * Delete Connector
+     * @param connectorId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteConnectorApiV1ConnectorsConnectorIdDelete(
+        connectorId: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/connectors/{connector_id}',
+            path: {
+                'connector_id': connectorId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Handle Webhook
      * Ingress point for all external webhooks (e.g. from GitHub, Slack).
      * @param source

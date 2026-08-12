@@ -1,14 +1,77 @@
-import { OpenAPI, AgentsService, ChatService, KnowledgeService, AuthService, TelemetryService, EvaluationsService, ResilienceService } from "../client";
+import { AgentsService, ChatService, KnowledgeService, AuthService, TelemetryService, EvaluationsService, ResilienceService } from "./api-client";
+import { OpenAPI } from "./api-client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import axios from "axios";
+
+export const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || "http://localhost:8000";
 OpenAPI.BASE = API_URL;
 
-const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : null;
+export const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-OpenAPI.TOKEN = async () => {
-  const token = getToken();
-  return token || "";
+// Initialize token on load
+const token = getToken();
+if (token) {
+  OpenAPI.TOKEN = token;
+}
+// Global Axios Interceptor for Zero-Friction Networking
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
 };
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise(function (resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(token => {
+            originalRequest.headers['Authorization'] = 'Bearer ' + token;
+            return axios(originalRequest);
+          })
+          .catch(err => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // The refresh endpoint uses HttpOnly cookies to securely refresh
+        const res = await axios.post(`${API_URL}/api/v1/auth/refresh`, {}, { withCredentials: true });
+        const newToken = res.data.access_token;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("token", newToken);
+        }
+        OpenAPI.TOKEN = newToken;
+        originalRequest.headers['Authorization'] = 'Bearer ' + newToken;
+        processQueue(null, newToken);
+        return axios(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export async function submitGoal(goal: string, threadId: string = "default") {
   // Save message to chat history
@@ -26,7 +89,7 @@ export async function submitGoal(goal: string, threadId: string = "default") {
 }
 
 export function getTimelineUrl() {
-  return `${OpenAPI.BASE}/api/v1/agents/timeline`;
+  return `${OpenAPI.BASE}/agents/timeline`;
 }
 
 export async function fetchChatHistory(threadId: string) {
@@ -34,18 +97,14 @@ export async function fetchChatHistory(threadId: string) {
 }
 
 export async function fetchChatThreads() {
-  const res = await fetch(`${OpenAPI.BASE}/api/v1/chat/threads`, {
-    method: "GET",
-    headers: { ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}) },
-  });
-  if (!res.ok) throw new Error("Failed to fetch chat threads");
-  return res.json();
+  const res = await ChatService.getChatThreadsApiV1ChatThreadsGet();
+  return res;
 }
 
 export async function saveChatMessage(threadId: string, role: string, content: string, traces: any[] = []) {
   return await ChatService.addChatMessageApiV1ChatMessagePost({
     thread_id: threadId,
-    role: role,
+    role: role as any,
     content: content,
     traces: traces
   });
@@ -56,24 +115,16 @@ export async function fetchGraph() {
 }
 
 export async function submitApproval(taskId: string, action: "approve" | "reject", feedback?: string) {
-  // Using explicit fetch for non-openapi mapped routes, or mapping if available.
-  // Wait, /tasks/{taskId}/approval might not be mapped since it was custom.
-  // Let's use the explicit fetch since it might not be in the openapi schema correctly.
-  const res = await fetch(`${OpenAPI.BASE}/api/v1/tasks/${taskId}/approval`, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {})
-    },
-    body: JSON.stringify({ action, feedback })
+  const res = await AgentsService.submitApprovalApiV1AgentsApprovePost({
+      task_id: taskId,
+      decision: action
   });
-  if (!res.ok) throw new Error("Approval failed");
-  return res.json();
+  return res;
 }
 
 export async function getCurrentUser() {
   const res = await AuthService.readUsersMeApiV1AuthMeGet();
-  return res.data;
+  return res;
 }
 
 export async function fetchTelemetry() {
@@ -88,29 +139,15 @@ export async function triggerSync(connectorType: string, config: any) {
 }
 
 export async function runEvaluations() {
-  // fallback to fetch if method doesn't exist
-  const res = await fetch(`${OpenAPI.BASE}/api/v1/evaluations/run`, {
-    method: "POST",
-    headers: { ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}) },
-  });
-  if (!res.ok) throw new Error("Evaluation run failed");
-  return res.json();
+  const res = await EvaluationsService.triggerEvaluationApiV1EvaluationsRunPost();
+  return res;
 }
 
 export async function runChaosTest() {
-  const res = await fetch(`${OpenAPI.BASE}/api/v1/resilience/chaos`, {
-    method: "POST",
-    headers: { ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}) },
-  });
-  if (!res.ok) throw new Error("Chaos run failed");
-  return res.json();
+  const res = await ResilienceService.startChaosApiV1ResilienceChaosPost({ mode: "latency", duration_ms: 5000, probability: 1.0 });
+  return res;
 }
 
 export async function fetchEvaluations() {
-  const res = await fetch(`${OpenAPI.BASE}/api/v1/evaluations/`, {
-    method: "GET",
-    headers: { ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}) },
-  });
-  if (!res.ok) throw new Error("Failed to fetch evaluations");
-  return res.json();
+  return await EvaluationsService.listEvaluationsApiV1EvaluationsGet();
 }

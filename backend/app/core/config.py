@@ -3,6 +3,7 @@ import os
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Veridex"
+    ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:3000",
@@ -46,12 +47,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7 # 7 days for refresh token
     
     # GitHub OAuth
-    GITHUB_CLIENT_ID: str = ""
-    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_CLIENT_ID: str
+    GITHUB_CLIENT_SECRET: str
     
     # Google OAuth
-    GOOGLE_CLIENT_ID: str = ""
-    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
     
     # LLM Providers
     OPENAI_API_KEY: str | None = None
@@ -64,6 +65,8 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URI(self) -> str:
+        if self.POSTGRES_SERVER == "localhost":
+            return "sqlite+aiosqlite:///./veridex.db"
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         
     @property

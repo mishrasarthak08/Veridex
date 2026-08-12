@@ -50,14 +50,16 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder="Ask Veridex anything..."
-          className="flex-1 max-h-[200px] min-h-[40px] bg-transparent resize-none outline-none py-2 text-[#F6F4EF] placeholder:text-white/20 font-body text-[15px] scrollbar-hide"
+          aria-label="Chat input message"
+          className="flex-1 max-h-[200px] min-h-[40px] bg-transparent resize-none outline-none py-2 text-[#F6F4EF] placeholder:text-white/20 font-body text-[15px] scrollbar-hide focus-visible:ring-2 focus-visible:ring-[#4C9FE8]/50 rounded-md"
           rows={1}
         />
         
         <button
           type="submit"
           disabled={!input.trim() || disabled}
-          className="shrink-0 w-10 h-10 rounded-xl bg-[#4C9FE8] text-black flex items-center justify-center hover:bg-[#4C9FE8]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          aria-label="Send message"
+          className="shrink-0 w-10 h-10 rounded-xl bg-[#4C9FE8] text-black flex items-center justify-center hover:bg-[#4C9FE8]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
           <Send size={18} className="mr-0.5" />
         </button>

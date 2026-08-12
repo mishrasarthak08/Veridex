@@ -14,22 +14,27 @@ type User = {
 type AuthContextType = {
   user: User | null;
   token: string | null;
+  activeTenant: string;
   loading: boolean;
   login: (token: string) => void;
   logout: () => void;
+  setTenant: (tenantId: string) => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
+  activeTenant: "default_tenant",
   loading: true,
   login: () => {},
   logout: () => {},
+  setTenant: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [activeTenant, setActiveTenant] = useState<string>("default_tenant");
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -45,10 +50,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const initAuth = async () => {
+      const storedTenant = localStorage.getItem("tenant_id") || "default_tenant";
+      setActiveTenant(storedTenant);
+      
       const storedToken = localStorage.getItem("token");
       if (storedToken && !isTokenExpired(storedToken)) {
         try {
           setToken(storedToken);
+          // TODO: Once the new API client is wired up globally, getCurrentUser() should automatically use it
           const userData = await getCurrentUser();
           setUser(userData);
         } catch (err) {
@@ -95,8 +104,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     router.push("/login");
   };
 
+  const setTenant = (tenantId: string) => {
+    localStorage.setItem("tenant_id", tenantId);
+    setActiveTenant(tenantId);
+    // You could reload here if changing tenants requires a fresh data fetch,
+    // or rely on components observing activeTenant from context.
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, activeTenant, loading, login, logout, setTenant }}>
       {loading ? (
         <div className="flex h-screen w-full items-center justify-center bg-[#0B0E12]">
           <div className="animate-spin h-8 w-8 border-4 border-[#4C9FE8] border-t-transparent rounded-full"></div>

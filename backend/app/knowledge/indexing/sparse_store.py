@@ -23,21 +23,38 @@ class BM25SparseStore:
         if self.tokenized_corpus:
             self.bm25 = BM25Okapi(self.tokenized_corpus)
 
-    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = 5, metadata_filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         if not self.bm25:
             return []
             
         tokenized_query = query.lower().split()
         scores = self.bm25.get_scores(tokenized_query)
         
-        # Get top-k indices
-        top_n = np.argsort(scores)[::-1][:limit]
+        # Sort scores and indices
+        sorted_indices = np.argsort(scores)[::-1]
         
         results = []
-        for idx in top_n:
-            if scores[idx] > 0:
-                result = self.corpus[idx].copy()
-                result["sparse_score"] = float(scores[idx])
-                results.append(result)
+        for idx in sorted_indices:
+            if scores[idx] <= 0:
+                continue
+                
+            doc = self.corpus[idx]
+            
+            # Apply metadata filters (tenant_id)
+            if metadata_filters:
+                match = True
+                for k, v in metadata_filters.items():
+                    if doc.get(k) != v and doc.get("payload", {}).get(k) != v:
+                        match = False
+                        break
+                if not match:
+                    continue
+                    
+            result = doc.copy()
+            result["sparse_score"] = float(scores[idx])
+            results.append(result)
+            
+            if len(results) >= limit:
+                break
                 
         return results

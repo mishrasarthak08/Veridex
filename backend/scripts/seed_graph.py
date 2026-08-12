@@ -16,15 +16,15 @@ async def seed_graph():
     
     # Create nodes and relationships
     query = """
-    CREATE (p1:Person {id: 'p1', name: 'Alice', role: 'Engineer'})
-    CREATE (p2:Person {id: 'p2', name: 'Bob', role: 'Manager'})
-    CREATE (p3:Person {id: 'p3', name: 'Charlie', role: 'Data Scientist'})
+    CREATE (p1:Person {id: 'p1', name: 'Alice', role: 'Engineer', tenant_id: 'default_tenant'})
+    CREATE (p2:Person {id: 'p2', name: 'Bob', role: 'Manager', tenant_id: 'default_tenant'})
+    CREATE (p3:Person {id: 'p3', name: 'Charlie', role: 'Data Scientist', tenant_id: 'default_tenant'})
     
-    CREATE (o1:Organization {id: 'o1', name: 'Veridex'})
-    CREATE (o2:Organization {id: 'o2', name: 'Acme Corp'})
+    CREATE (o1:Organization {id: 'o1', name: 'Veridex', tenant_id: 'default_tenant'})
+    CREATE (o2:Organization {id: 'o2', name: 'Acme Corp', tenant_id: 'default_tenant'})
     
-    CREATE (d1:Document {id: 'd1', title: 'Veridex Architecture'})
-    CREATE (d2:Document {id: 'd2', title: 'Q3 Financials'})
+    CREATE (d1:Document {id: 'd1', title: 'Veridex Architecture', tenant_id: 'default_tenant'})
+    CREATE (d2:Document {id: 'd2', title: 'Q3 Financials', tenant_id: 'default_tenant'})
     
     CREATE (p1)-[:WORKS_FOR]->(o1)
     CREATE (p2)-[:WORKS_FOR]->(o1)

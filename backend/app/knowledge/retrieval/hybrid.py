@@ -14,13 +14,15 @@ class HybridRetriever:
         self.vector_store = vector_store
         self.sparse_store = sparse_store
 
-    async def retrieve(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def retrieve(self, query: str, limit: int = 10, tenant_id: str = None) -> List[Dict[str, Any]]:
+        filters = {"tenant_id": tenant_id} if tenant_id else None
+        
         # 1. Dense Search
         query_vector = await self.embedder.embed_query(query)
-        dense_results = await self.vector_store.search(query_vector, limit=limit)
+        dense_results = await self.vector_store.search(query_vector, limit=limit, metadata_filters=filters)
         
         # 2. Sparse Search (BM25)
-        sparse_results = self.sparse_store.search(query, limit=limit)
+        sparse_results = self.sparse_store.search(query, limit=limit, metadata_filters=filters)
         
         # 3. Reciprocal Rank Fusion (RRF)
         # Combine dense and sparse results using RRF score

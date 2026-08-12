@@ -7,6 +7,18 @@ import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class DefaultService {
     /**
+     * Metrics
+     * Endpoint that serves Prometheus metrics.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static metricsMetricsGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/metrics',
+        });
+    }
+    /**
      * Root
      * @returns any Successful Response
      * @throws ApiError

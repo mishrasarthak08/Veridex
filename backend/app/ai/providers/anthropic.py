@@ -8,7 +8,7 @@ class AnthropicProvider(BaseProvider):
     async def generate(self, model: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs) -> Dict[str, Any]:
         litellm_model = model if model.startswith("anthropic/") else f"anthropic/{model}"
         response = await litellm.acompletion(
-            model=litellm_model,
+            model=litellm_model, caching=True,
             messages=messages,
             tools=tools,
             **kwargs
@@ -18,7 +18,7 @@ class AnthropicProvider(BaseProvider):
     async def stream(self, model: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
         litellm_model = model if model.startswith("anthropic/") else f"anthropic/{model}"
         response = await litellm.acompletion(
-            model=litellm_model,
+            model=litellm_model, caching=True,
             messages=messages,
             tools=tools,
             stream=True,
@@ -29,4 +29,4 @@ class AnthropicProvider(BaseProvider):
 
     def count_tokens(self, model: str, messages: List[Dict[str, Any]]) -> int:
         litellm_model = model if model.startswith("anthropic/") else f"anthropic/{model}"
-        return litellm.token_counter(model=litellm_model, messages=messages)
+        return litellm.token_counter(model=litellm_model, caching=True, messages=messages)

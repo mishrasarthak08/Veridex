@@ -8,14 +8,13 @@ class GraphRepository:
         self.uri = settings.NEO4J_URI
         self.user = settings.NEO4J_USER
         self.password = settings.NEO4J_PASSWORD
-        self.driver = AsyncGraphDatabase.driver(self.uri, auth=(self.user, self.password))
+        self.driver = AsyncGraphDatabase.driver(self.uri, auth=(self.user, self.password), connection_timeout=2.0)
 
     async def close(self):
         await self.driver.close()
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(1),
         retry=retry_if_exception_type((ServiceUnavailable, SessionExpired))
     )
     async def execute_query(self, query: str, parameters: dict = None):
@@ -27,8 +26,7 @@ class GraphRepository:
             return records
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(1),
         retry=retry_if_exception_type((ServiceUnavailable, SessionExpired))
     )
     async def execute_write(self, query: str, parameters: dict = None):

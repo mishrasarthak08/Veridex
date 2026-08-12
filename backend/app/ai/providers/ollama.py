@@ -13,7 +13,7 @@ class OllamaProvider(BaseProvider):
     async def generate(self, model: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs) -> Dict[str, Any]:
         litellm_model = model if model.startswith("ollama/") else f"ollama/{model}"
         response = await litellm.acompletion(
-            model=litellm_model,
+            model=litellm_model, caching=True,
             messages=messages,
             tools=tools,
             api_base=self.api_base,
@@ -24,7 +24,7 @@ class OllamaProvider(BaseProvider):
     async def stream(self, model: str, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
         litellm_model = model if model.startswith("ollama/") else f"ollama/{model}"
         response = await litellm.acompletion(
-            model=litellm_model,
+            model=litellm_model, caching=True,
             messages=messages,
             tools=tools,
             api_base=self.api_base,
@@ -37,4 +37,4 @@ class OllamaProvider(BaseProvider):
     def count_tokens(self, model: str, messages: List[Dict[str, Any]]) -> int:
         # litellm token counting for ollama might fallback to default encodings
         litellm_model = model if model.startswith("ollama/") else f"ollama/{model}"
-        return litellm.token_counter(model=litellm_model, messages=messages)
+        return litellm.token_counter(model=litellm_model, caching=True, messages=messages)

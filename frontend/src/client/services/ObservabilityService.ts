@@ -7,6 +7,17 @@ import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class ObservabilityService {
     /**
+     * Get Traces
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getTracesApiV1ObservabilityTracesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/observability/traces',
+        });
+    }
+    /**
      * Get Trace
      * Returns the AI execution trace for the Playground UI.
      * @param traceId

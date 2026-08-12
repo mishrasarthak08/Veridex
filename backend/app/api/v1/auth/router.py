@@ -1,9 +1,9 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from fastapi.responses import JSONResponse
 
 from app.db.session import get_db
 from app.db.models.user import User
@@ -12,41 +12,32 @@ from app.core.config import settings
 from app.api.deps import get_current_user
 from app.schemas.common import success_response, error_response
 from app.core.rate_limit import limiter
+from app.services.auth_service import AuthService
+from app.schemas.user import UserCreate
 
 router = APIRouter()
-
-from app.schemas.user import UserCreate
 
 @router.post("/register")
 @limiter.limit("5/minute")
 async def register_user(
     request: Request,
+    response: Response,
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
     Register a new user.
     """
-    # Check if user exists
-    result = await db.execute(select(User).where(User.email == user_in.email))
-    user = result.scalar_one_or_none()
+    service = AuthService(db)
+    user = await service.get_user_by_email(user_in.email)
     
     if user:
         raise HTTPException(
             status_code=400,
             detail="The user with this email already exists in the system.",
         )
-    user = User(
-        email=user_in.email,
-        hashed_password=security.get_password_hash(user_in.password),
-        first_name=user_in.first_name,
-        last_name=user_in.last_name,
-        tos_accepted=user_in.tos_accepted,
-        privacy_accepted=user_in.privacy_accepted,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+        
+    user = await service.register_user(user_in.model_dump())
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = security.create_access_token(
@@ -58,80 +49,46 @@ async def register_user(
         "token_type": "bearer",  # nosec B105
     }
 
-from fastapi.responses import JSONResponse
-from app.db.models.audit import LoginAuditLog
-
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login_access_token(
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
-    result = await db.execute(select(User).where(User.email == form_data.username))
-    user = result.scalar_one_or_none()
-    
-    # Audit logging
+    service = AuthService(db)
     client_host = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
-    if not user or not security.verify_password(form_data.password, user.hashed_password):
-        audit_log = LoginAuditLog(
-            user_id=str(user.id) if user else None,
-            email_attempted=form_data.username,
-            ip_address=client_host,
-            user_agent=user_agent,
-            success=False,
-            failure_reason="Incorrect email or password"
-        )
-        db.add(audit_log)
-        await db.commit()
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
-    elif not user.is_active:
-        audit_log = LoginAuditLog(
-            user_id=str(user.id),
-            email_attempted=form_data.username,
-            ip_address=client_host,
-            user_agent=user_agent,
-            success=False,
-            failure_reason="Inactive user"
-        )
-        db.add(audit_log)
-        await db.commit()
-        raise HTTPException(status_code=400, detail="Inactive user")
+    user, error_msg = await service.verify_login(
+        email=form_data.username,
+        password=form_data.password,
+        ip_address=client_host,
+        user_agent=user_agent
+    )
+    
+    if error_msg:
+        raise HTTPException(status_code=400, detail=error_msg)
         
     # MFA Check
     if user.mfa_enabled:
         # User has MFA enabled, return a partial token to hit /login/mfa
-        audit_log = LoginAuditLog(
-            user_id=str(user.id),
-            email_attempted=form_data.username,
-            ip_address=client_host,
-            user_agent=user_agent,
-            success=True,
-            failure_reason="MFA required"
+        await service.log_audit(
+            str(user.id), form_data.username, client_host, user_agent, True, "MFA required"
         )
-        db.add(audit_log)
-        await db.commit()
-        
         mfa_token = security.create_access_token(
             subject=user.id, expires_delta=timedelta(minutes=5)
         )
         return {"requires_mfa": True, "mfa_token": mfa_token}
     
     # Full login
-    audit_log = LoginAuditLog(
-        user_id=str(user.id),
-        email_attempted=form_data.username,
-        ip_address=client_host,
-        user_agent=user_agent,
-        success=True
+    await service.log_audit(
+        str(user.id), form_data.username, client_host, user_agent, True
     )
-    db.add(audit_log)
-    await db.commit()
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = security.create_access_token(
@@ -236,52 +193,23 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=400, detail="No primary email found on GitHub account")
             
         # 4. Account Linking / Creation
-        # Check if OAuth account exists
-        oauth_result = await db.execute(
-            select(OAuthAccount).where(
-                OAuthAccount.provider == "github",
-                OAuthAccount.provider_account_id == github_id
-            )
-        )
-        oauth_account = oauth_result.scalar_one_or_none()
+        service = AuthService(db)
+        first_name = github_user.get("name", "").split(" ")[0] if github_user.get("name") else ""
+        last_name = " ".join(github_user.get("name", "").split(" ")[1:]) if github_user.get("name") else ""
         
-        if oauth_account:
-            user_id = oauth_account.user_id
-        else:
-            # Check if user with email exists
-            user_result = await db.execute(select(User).where(User.email == primary_email))
-            user = user_result.scalar_one_or_none()
-            
-            if not user:
-                # Create new user
-                alphabet = string.ascii_letters + string.digits
-                random_password = ''.join(secrets.choice(alphabet) for i in range(20))
-                
-                user = User(
-                    email=primary_email,
-                    hashed_password=security.get_password_hash(random_password),
-                    first_name=github_user.get("name", "").split(" ")[0] if github_user.get("name") else "",
-                    last_name=" ".join(github_user.get("name", "").split(" ")[1:]) if github_user.get("name") else ""
-                )
-                db.add(user)
-                await db.flush() # flush to get user.id
-                
-            # Create OAuth Account
-            oauth_account = OAuthAccount(
-                user_id=user.id,
-                provider="github",
-                provider_account_id=github_id,
-                access_token=access_token
-            )
-            db.add(oauth_account)
-            await db.commit()
-            
-            user_id = user.id
+        user = await service.get_or_create_oauth_user(
+            provider="github",
+            provider_account_id=github_id,
+            primary_email=primary_email,
+            access_token=access_token,
+            first_name=first_name,
+            last_name=last_name
+        )
             
         # 5. Issue JWT
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         jwt_token = security.create_access_token(
-            user_id, expires_delta=access_token_expires
+            user.id, expires_delta=access_token_expires
         )
         
         return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
@@ -344,57 +272,22 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Failed to get user profile from Google")
             
         # 3. Account Linking / Creation
-        oauth_result = await db.execute(
-            select(OAuthAccount).where(
-                OAuthAccount.provider == "google",
-                OAuthAccount.provider_account_id == google_id
-            )
-        )
-        oauth_account = oauth_result.scalar_one_or_none()
+        service = AuthService(db)
         
-        if oauth_account:
-            user_id = oauth_account.user_id
-            # Update tokens
-            oauth_account.access_token = access_token
-            if refresh_token:
-                oauth_account.refresh_token = refresh_token
-            await db.commit()
-        else:
-            # Check if user with email exists
-            user_result = await db.execute(select(User).where(User.email == primary_email))
-            user = user_result.scalar_one_or_none()
-            
-            if not user:
-                # Create new user
-                alphabet = string.ascii_letters + string.digits
-                random_password = ''.join(secrets.choice(alphabet) for i in range(20))
-                
-                user = User(
-                    email=primary_email,
-                    hashed_password=security.get_password_hash(random_password),
-                    first_name=google_user.get("given_name", ""),
-                    last_name=google_user.get("family_name", "")
-                )
-                db.add(user)
-                await db.flush()
-                
-            # Create OAuth Account
-            oauth_account = OAuthAccount(
-                user_id=user.id,
-                provider="google",
-                provider_account_id=google_id,
-                access_token=access_token,
-                refresh_token=refresh_token
-            )
-            db.add(oauth_account)
-            await db.commit()
-            
-            user_id = user.id
+        user = await service.get_or_create_oauth_user(
+            provider="google",
+            provider_account_id=google_id,
+            primary_email=primary_email,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            first_name=google_user.get("given_name", ""),
+            last_name=google_user.get("family_name", "")
+        )
             
         # 4. Issue JWT
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         jwt_token = security.create_access_token(
-            user_id, expires_delta=access_token_expires
+            user.id, expires_delta=access_token_expires
         )
         
         return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={jwt_token}")
@@ -416,8 +309,8 @@ async def refresh_access_token(
         raise HTTPException(status_code=401, detail="Invalid refresh token")
         
     user_id = payload.get("sub")
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    service = AuthService(db)
+    user = await service.user_repo.get(user_id)
     
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")

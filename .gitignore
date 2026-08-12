@@ -38,3 +38,4 @@ Thumbs.db
 
 # Project specific
 backend/alembic.ini
+backend/veridex.db

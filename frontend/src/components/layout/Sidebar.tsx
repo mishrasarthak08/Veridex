@@ -9,19 +9,25 @@ import {
   Plug, 
   ShieldCheck, 
   Activity,
-  MessageSquare
+  MessageSquare,
+  Terminal,
+  Workflow,
+  BrainCircuit,
+  LineChart
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const navItems = [
   { name: "Orchestrator", href: "/", icon: LayoutDashboard },
+  { name: "Studio", href: "/studio", icon: Workflow },
   { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Memory", href: "/memory", icon: BrainCircuit },
   { name: "Projects", href: "/projects", icon: Network },
   { name: "Knowledge Graph", href: "/knowledge-graph", icon: Network },
+  { name: "Terminal", href: "/terminal", icon: Terminal },
+  { name: "Evaluations", href: "/evaluations", icon: LineChart },
   { name: "Connectors", href: "/connectors", icon: Plug },
   { name: "Policies", href: "/policies", icon: ShieldCheck },
-  { name: "Telemetry", href: "/telemetry", icon: Activity },
-  { name: "Evaluations", href: "/evaluations", icon: Activity },
   { name: "Resilience", href: "/resilience", icon: ShieldCheck },
 ];
 

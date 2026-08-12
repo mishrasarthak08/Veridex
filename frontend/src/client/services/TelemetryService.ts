@@ -9,7 +9,7 @@ export class TelemetryService {
     /**
      * Get Telemetry Logs
      * Retrieve recent AI telemetry logs.
-     * Currently only accessible to system admins.
+     * Accessible to users with admin or owner roles.
      * @param skip
      * @param limit
      * @returns any Successful Response

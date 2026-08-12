@@ -1,10 +1,18 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import asyncio
 import json
 from datetime import datetime
+import structlog
 
+logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+class ChaosRequest(BaseModel):
+    mode: str
+    duration_ms: int = 0
+    probability: float = 0.5
 
 async def chaos_event_generator():
     events = [
@@ -27,8 +35,12 @@ async def stream_chaos():
     return StreamingResponse(chaos_event_generator(), media_type="text/event-stream")
 
 @router.post("/chaos")
-async def start_chaos():
+async def start_chaos(req: ChaosRequest):
     """
-    Start chaos test
+    Start specific chaos injection
     """
-    return {"status": "started"}
+    logger.warning("Chaos event injected", mode=req.mode, probability=req.probability, duration_ms=req.duration_ms)
+    
+    # In a real system, this would write to Redis/Consul to configure a global fault injector 
+    # For now, we simulate the return status
+    return {"status": "chaos_injected", "mode": req.mode}

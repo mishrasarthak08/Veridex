@@ -30,8 +30,14 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
     
+    import uuid
+    try:
+        user_uuid = uuid.UUID(token_data)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+
     # Query user from DB
-    result = await db.execute(select(User).where(User.id == token_data))
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
     
     if not user:

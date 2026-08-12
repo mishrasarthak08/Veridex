@@ -1,6 +1,6 @@
 from .base import BaseProvider
 from typing import List, Dict, Any, AsyncGenerator, Optional
-from openai import AsyncOpenAI
+import litellm
 import tiktoken
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import openai
@@ -12,7 +12,7 @@ class OpenAIProvider(BaseProvider):
     def __init__(self):
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY must be set in environment or .env file to use OpenAIProvider")
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # We use litellm for all providers now, so no need for self.client
 
     @retry(
         stop=stop_after_attempt(3),
@@ -26,12 +26,14 @@ class OpenAIProvider(BaseProvider):
         req_kwargs = {
             "model": model_name,
             "messages": messages,
+            "api_key": settings.OPENAI_API_KEY,
+            "caching": True,  # Enable litellm caching (semantic cache if configured)
             **kwargs
         }
         if tools:
             req_kwargs["tools"] = tools
 
-        response = await self.client.chat.completions.create(**req_kwargs)
+        response = await litellm.acompletion(**req_kwargs)
         return response.model_dump()
 
     @retry(
@@ -46,12 +48,14 @@ class OpenAIProvider(BaseProvider):
             "model": model_name,
             "messages": messages,
             "stream": True,
+            "api_key": settings.OPENAI_API_KEY,
+            "caching": True,  # Enable litellm caching (semantic cache if configured)
             **kwargs
         }
         if tools:
             req_kwargs["tools"] = tools
 
-        response = await self.client.chat.completions.create(**req_kwargs)
+        response = await litellm.acompletion(**req_kwargs)
         
         async for chunk in response:
             yield chunk.model_dump()

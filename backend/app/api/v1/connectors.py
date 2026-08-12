@@ -12,6 +12,7 @@ from app.api.deps import get_current_user
 from app.db.models.user import User
 from app.connectors.webhooks.manager import WebhookManager
 from app.connectors.scheduler.engine import SyncScheduler
+from app.services.connector_service import ConnectorService
 
 router = APIRouter()
 webhook_manager = WebhookManager()
@@ -37,10 +38,9 @@ async def list_connectors(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(
-        select(ConnectorConfig).where(ConnectorConfig.user_id == current_user.id)
-    )
-    return {"data": result.scalars().all()}
+    service = ConnectorService(db)
+    connectors = await service.list_connectors(current_user.id)
+    return {"data": connectors}
 
 @router.post("/")
 async def create_connector(
@@ -48,17 +48,14 @@ async def create_connector(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    connector = ConnectorConfig(
-        id=str(uuid.uuid4()),
+    service = ConnectorService(db)
+    connector = await service.create_connector(
         name=config.name,
         source_type=config.source_type,
         config_data=config.config_data,
         is_active=config.is_active,
         user_id=current_user.id
     )
-    db.add(connector)
-    await db.commit()
-    await db.refresh(connector)
     return {"data": connector}
 
 @router.put("/{connector_id}")
@@ -68,25 +65,16 @@ async def update_connector(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    stmt = select(ConnectorConfig).where(
-        ConnectorConfig.id == connector_id,
-        ConnectorConfig.user_id == current_user.id
+    service = ConnectorService(db)
+    connector = await service.update_connector(
+        connector_id=connector_id,
+        name=update_data.name,
+        config_data=update_data.config_data,
+        is_active=update_data.is_active,
+        user_id=current_user.id
     )
-    result = await db.execute(stmt)
-    connector = result.scalars().first()
-    
     if not connector:
         return {"error": "Connector not found"}
-        
-    if update_data.name is not None:
-        connector.name = update_data.name
-    if update_data.config_data is not None:
-        connector.config_data = update_data.config_data
-    if update_data.is_active is not None:
-        connector.is_active = update_data.is_active
-        
-    await db.commit()
-    await db.refresh(connector)
     return {"data": connector}
 
 @router.delete("/{connector_id}")
@@ -95,18 +83,10 @@ async def delete_connector(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    stmt = select(ConnectorConfig).where(
-        ConnectorConfig.id == connector_id,
-        ConnectorConfig.user_id == current_user.id
-    )
-    result = await db.execute(stmt)
-    connector = result.scalars().first()
-    
-    if not connector:
+    service = ConnectorService(db)
+    success = await service.delete_connector(connector_id, current_user.id)
+    if not success:
         return {"error": "Connector not found"}
-        
-    await db.delete(connector)
-    await db.commit()
     return {"status": "deleted"}
 
 
@@ -135,10 +115,8 @@ async def get_dashboard_metrics(
     """
     Returns metrics for the Sync Dashboard.
     """
-    result = await db.execute(
-        select(ConnectorConfig).where(ConnectorConfig.user_id == current_user.id)
-    )
-    connectors = result.scalars().all()
+    service = ConnectorService(db)
+    connectors = await service.list_connectors(current_user.id)
     connected_services = [c.source_type for c in connectors if c.is_active]
 
     return {

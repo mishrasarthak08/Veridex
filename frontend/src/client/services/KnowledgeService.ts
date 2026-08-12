@@ -49,6 +49,7 @@ export class KnowledgeService {
     /**
      * Get Graph Data
      * Fetches the Knowledge Graph structure (nodes and edges) for UI visualization.
+     * Filters strictly by tenant_id.
      * @returns any Successful Response
      * @throws ApiError
      */

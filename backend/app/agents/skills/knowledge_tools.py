@@ -4,6 +4,20 @@ from app.knowledge.embeddings.litellm_embedder import LiteLLMEmbedder
 from app.knowledge.indexing.vector_store import QdrantVectorStore
 from app.knowledge.indexing.sparse_store import BM25SparseStore
 import json
+from app.knowledge.graph.cypher_generator import CypherGenerator
+
+@tool
+async def query_knowledge_graph(query: str, tenant_id: str) -> str:
+    """
+    Translates a natural language query into a Graph Database (Neo4j) Cypher query,
+    executes it, and returns the structural or relational results.
+    Use this tool when answering questions about relationships (e.g. who works where, who authored what).
+    """
+    try:
+        generator = CypherGenerator()
+        return await generator.generate_and_run(query, tenant_id)
+    except Exception as e:
+        return f"Error querying knowledge graph: {e}"
 
 @tool
 async def search_knowledge(query: str, limit: int = 5) -> str:

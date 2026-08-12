@@ -9,6 +9,10 @@ analytics = CostAnalytics()
 import json
 import os
 
+@router.get("/traces")
+async def get_traces():
+    return []
+
 @router.get("/traces/{trace_id}")
 async def get_trace(trace_id: str):
     """

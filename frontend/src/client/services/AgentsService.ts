@@ -9,9 +9,20 @@ import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class AgentsService {
     /**
+     * List Agents
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static listAgentsApiV1AgentsGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/agents/',
+        });
+    }
+    /**
      * Submit Goal
-     * Submits a complex goal to the Orchestrator, which breaks it into a DAG
-     * and schedules it across multiple specialized agents.
+     * Submits a complex goal to the Orchestrator.
+     * Tracks lifecycle states and writes to the Immutable Audit Log.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError

@@ -59,6 +59,7 @@ async def setup_governance_db(db_session: AsyncSession):
     # Create permissions
     proj_read_perm = Permission(name="project:read", resource="project", action="read")
     proj_write_perm = Permission(name="project:write", resource="project", action="write")
+    conn_invoke_perm = Permission(name="connector:invoke", resource="connector", action="invoke")
     
     # Create roles
     admin_role = Role(name="admin", description="Admin role")
@@ -68,6 +69,7 @@ async def setup_governance_db(db_session: AsyncSession):
     viewer_role.permissions.append(proj_read_perm)
     admin_role.permissions.append(proj_read_perm)
     admin_role.permissions.append(proj_write_perm)
+    admin_role.permissions.append(conn_invoke_perm)
     
     # Create users
     admin_user = User(
@@ -110,20 +112,21 @@ async def test_policy_evaluation_and_audit(setup_governance_db, db_session: Asyn
     app.dependency_overrides[get_current_user] = lambda: viewer
     app.dependency_overrides[get_db] = lambda: db_session
 
-    client = TestClient(app)
+    import httpx
     
     # 1. Viewer trying to read project -> Allowed (has 'project:read' permission)
-    response = client.get("/project/read")
-    assert response.status_code == 200, f"Expected 200, got {response.status_code} - {response.text}"
-    
-    # 2. Viewer trying to invoke connector -> Denied (only 'admin' role allowed per YAML policy)
-    response = client.get("/connector/invoke")
-    assert response.status_code == 403, "Expected 403 Forbidden"
-    
-    # 3. Admin trying to invoke connector -> Allowed
-    app.dependency_overrides[get_current_user] = lambda: admin
-    response = client.get("/connector/invoke")
-    assert response.status_code == 200, "Expected 200 OK for Admin"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/project/read")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code} - {response.text}"
+        
+        # 2. Viewer trying to invoke connector -> Denied (only 'admin' role allowed per YAML policy)
+        response = await client.get("/connector/invoke")
+        assert response.status_code == 403, "Expected 403 Forbidden"
+        
+        # 3. Admin trying to invoke connector -> Allowed
+        app.dependency_overrides[get_current_user] = lambda: admin
+        response = await client.get("/connector/invoke")
+        assert response.status_code == 200, "Expected 200 OK for Admin"
     
     # 4. Verify Audit Logs
     assert os.path.exists(audit_log_path), "Audit log file was not created"

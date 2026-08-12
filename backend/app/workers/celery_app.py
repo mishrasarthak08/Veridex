@@ -1,5 +1,9 @@
 from celery import Celery
 from app.core.config import settings
+from app.core.telemetry import setup_telemetry
+
+# Initialize OpenTelemetry for Celery Worker
+setup_telemetry()
 
 # Use Redis as the message broker and result backend
 REDIS_URL = settings.REDIS_URL

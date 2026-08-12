@@ -8,6 +8,7 @@ from app.api.v1.connectors import router as connectors_router
 from app.api.v1.observability import router as observability_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.telemetry import router as telemetry_router
+from app.api.v1.ws.router import router as ws_router
 
 from app.api.v1.chat import router as chat_router
 
@@ -29,3 +30,4 @@ api_router.include_router(telemetry_router, prefix="/telemetry", tags=["telemetr
 api_router.include_router(evaluations_router, prefix="/evaluations", tags=["evaluations"])
 api_router.include_router(resilience_router, prefix="/resilience", tags=["resilience"])
 api_router.include_router(projects_router, prefix="/projects", tags=["projects"])
+api_router.include_router(ws_router, prefix="/ws", tags=["websocket"])

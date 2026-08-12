@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, ForeignKey
+from sqlalchemy import String, Text, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
 
@@ -11,5 +11,7 @@ class Project(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str] = mapped_column(Text, nullable=True)
     
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    
+    swarm_config: Mapped[dict] = mapped_column(JSON, nullable=True)
     
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="projects")

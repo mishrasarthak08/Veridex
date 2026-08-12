@@ -11,14 +11,22 @@ def get_user_or_ip(request: Request) -> str:
     return get_remote_address(request)
 
 # Use Redis storage for rate limiting, fallback to memory if REDIS_URL is invalid/not set
-try:
+if settings.REDIS_SERVER == "localhost":
     limiter = Limiter(
         key_func=get_user_or_ip,
-        storage_uri=settings.REDIS_URL,
-        headers_enabled=True
+        headers_enabled=True,
+        storage_uri="memory://"
     )
-except Exception:
-    limiter = Limiter(
-        key_func=get_user_or_ip,
-        headers_enabled=True
-    )
+else:
+    try:
+        limiter = Limiter(
+            key_func=get_user_or_ip,
+            storage_uri=settings.REDIS_URL,
+            headers_enabled=True
+        )
+    except Exception:
+        limiter = Limiter(
+            key_func=get_user_or_ip,
+            headers_enabled=True,
+            storage_uri="memory://"
+        )

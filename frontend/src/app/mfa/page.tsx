@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-
+import { AuthService, OpenAPI } from "../../services/api";
 export default function MfaPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -24,31 +24,24 @@ export default function MfaPage() {
     setError("");
     setLoading(true);
 
+    const mfaToken = sessionStorage.getItem("mfa_token") || "";
+    const originalToken = OpenAPI.TOKEN;
+    OpenAPI.TOKEN = mfaToken;
+
     try {
-      const token = sessionStorage.getItem("mfa_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-      
-      const res = await fetch(`${apiUrl}/auth/mfa/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ code }),
-      });
+      const resData = await AuthService.mfaVerifyApiV1AuthMfaVerifyPost({ code });
 
-      if (!res.ok) {
-        const resData = await res.json();
-        throw new Error(resData.detail || "Verification failed");
-      }
-
-      const resData = await res.json();
       sessionStorage.removeItem("mfa_token");
       login(resData.access_token);
       router.push("/evaluations");
     } catch (err: any) {
-      setError(err.message);
+      if (err.body && (err.body.detail || err.body.error)) {
+        setError(err.body.detail || err.body.error);
+      } else {
+        setError(err.message || "Verification failed");
+      }
     } finally {
+      OpenAPI.TOKEN = originalToken;
       setLoading(false);
     }
   };
