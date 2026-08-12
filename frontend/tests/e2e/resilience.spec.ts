@@ -7,6 +7,17 @@ test('Chaos Engineering Control Panel allows injecting chaos', async ({ page }) 
     await route.fulfill({ json });
   });
 
+  // Mock authentication to prevent redirect to login
+  await page.route('**/api/v1/auth/me', async route => {
+    await route.fulfill({ json: { id: "test", email: "test@example.com", first_name: "Test", last_name: "User" } });
+  });
+
+  await page.addInitScript(() => {
+    // Create a fake JWT that doesn't expire
+    const payload = btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, sub: 'test-user' }));
+    localStorage.setItem('token', `header.${payload}.signature`);
+  });
+
   await page.goto('/resilience');
 
   // Verify header
