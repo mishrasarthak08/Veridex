@@ -131,6 +131,7 @@ export default function StudioPage() {
         />
         <Panel position="top-right" className="flex gap-2">
           <button 
+            title="Configure Node Settings"
             onClick={() => toast.info("Configuration Panel", { description: "Node configuration settings are coming soon." })}
             className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-md hover:bg-white/10 text-white/80 transition-colors text-sm"
           >
@@ -138,6 +139,7 @@ export default function StudioPage() {
             Configure
           </button>
           <button 
+            title="Save the current swarm configuration to the database"
             onClick={handleSaveSwarm}
             disabled={isSaving}
             className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-md hover:bg-white/10 text-white/80 transition-colors text-sm disabled:opacity-50"
@@ -146,6 +148,7 @@ export default function StudioPage() {
             {isSaving ? "Saving..." : "Save Swarm"}
           </button>
           <button 
+            title="Deploy this swarm to the production environment"
             onClick={handleDeploySwarm}
             disabled={isDeploying}
             className="flex items-center gap-2 px-4 py-2 bg-[#4C9FE8] text-black font-semibold rounded-md hover:bg-[#4C9FE8]/90 transition-colors shadow-lg shadow-[#4C9FE8]/20 text-sm disabled:opacity-50"

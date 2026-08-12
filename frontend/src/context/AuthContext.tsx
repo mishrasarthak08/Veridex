@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { getCurrentUser } from "../lib/api";
+import { getCurrentUser, setGlobalToken } from "../lib/api";
 
 type User = {
   id: string;
@@ -57,6 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (storedToken && !isTokenExpired(storedToken)) {
         try {
           setToken(storedToken);
+          setGlobalToken(storedToken);
           // TODO: Once the new API client is wired up globally, getCurrentUser() should automatically use it
           const userData = await getCurrentUser();
           setUser(userData);
@@ -91,15 +92,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [user, loading, pathname, router]);
 
-  const login = (token: string) => {
+  const login = async (token: string) => {
     localStorage.setItem("token", token);
-    // Reload to fetch user and redirect
-    window.location.href = "/";
+    setToken(token);
+    setGlobalToken(token);
+    
+    // Optimistically fetch user and redirect without a hard reload
+    setLoading(true);
+    try {
+      const userData = await getCurrentUser();
+      setUser(userData);
+      router.push("/");
+    } catch (err) {
+      console.error("Failed to fetch user during login", err);
+      // Fallback
+      window.location.href = "/";
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
     localStorage.removeItem("token");
     setToken(null);
+    setGlobalToken(null);
     setUser(null);
     router.push("/login");
   };

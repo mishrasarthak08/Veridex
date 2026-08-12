@@ -58,15 +58,7 @@ export default function ChatPage() {
           if (history && history.length > 0) {
             setMessages(history);
           } else {
-            setMessages([
-              {
-                id: "welcome",
-                role: "assistant",
-                content: "Hello! I am Veridex. I can help you search the knowledge base or execute complex agentic workflows. What would you like to do?",
-                traces: [],
-                isGenerating: false,
-              }
-            ]);
+            setMessages([]);
           }
         } catch (e) {
           console.error("Failed to load history", e);
@@ -279,11 +271,33 @@ export default function ChatPage() {
           </button>
         </header>
         
-        <main className="flex-1 overflow-y-auto px-6 py-8">
+        <main className="flex-1 overflow-y-auto px-6 py-8 relative">
           <div className="max-w-3xl mx-auto flex flex-col gap-8">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[60vh] text-center max-w-lg mx-auto opacity-80 mt-10">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#4C9FE8]/20 to-[#2FAE86]/20 border border-white/10 flex items-center justify-center mb-6 shadow-xl shadow-[#4C9FE8]/10">
+                  <MessageSquarePlus className="w-8 h-8 text-[#4C9FE8]" />
+                </div>
+                <h2 className="text-2xl font-display font-bold text-white mb-2">Welcome to Veridex Chat</h2>
+                <p className="text-white/60 text-sm mb-8 leading-relaxed">
+                  You can ask me to search the knowledge base, query real-time data, or kick off a multi-agent workflow. I have access to your connected data sources.
+                </p>
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button onClick={() => handleSend("Explain how the latest policy updates affect me.")} className="p-3 text-left border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                    <div className="text-xs font-bold text-white/80 mb-1">Knowledge Search</div>
+                    <div className="text-[10px] text-white/50">"Explain the latest policies..."</div>
+                  </button>
+                  <button onClick={() => handleSend("Run a system health check and generate a report.")} className="p-3 text-left border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                    <div className="text-xs font-bold text-white/80 mb-1">Agentic Workflow</div>
+                    <div className="text-[10px] text-white/50">"Run a system health check..."</div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))
+            )}
             <div ref={messagesEndRef} className="h-4" />
           </div>
         </main>

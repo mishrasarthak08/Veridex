@@ -13,6 +13,11 @@ const token = getToken();
 if (token) {
   OpenAPI.TOKEN = token;
 }
+
+export const setGlobalToken = (newToken: string | null) => {
+  OpenAPI.TOKEN = newToken || undefined;
+};
+
 // Global Axios Interceptor for Zero-Friction Networking
 let isRefreshing = false;
 let failedQueue: any[] = [];
