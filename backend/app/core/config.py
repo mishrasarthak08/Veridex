@@ -47,12 +47,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7 # 7 days for refresh token
     
     # GitHub OAuth
-    GITHUB_CLIENT_ID: str
-    GITHUB_CLIENT_SECRET: str
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
     
     # Google OAuth
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
     
     # LLM Providers
     OPENAI_API_KEY: str | None = None

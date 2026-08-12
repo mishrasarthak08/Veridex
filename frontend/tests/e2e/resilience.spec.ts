@@ -10,7 +10,7 @@ test('Chaos Engineering Control Panel allows injecting chaos', async ({ page }) 
   await page.goto('/resilience');
 
   // Verify header
-  await expect(page.locator('h1')).toContainText('Chaos Engineering Control Panel');
+  await expect(page.getByRole('heading', { name: /Chaos Engineering Control Panel/i })).toBeVisible();
 
   // Click the simulate 503 outage button
   const simulateBtn = page.getByRole('button', { name: /Simulate 503 Outage/i });
